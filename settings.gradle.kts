@@ -17,6 +17,9 @@ dependencyResolutionManagement {
             library("junit-api", "org.junit.jupiter:junit-jupiter-api:$junit")
             library("junit-engine", "org.junit.jupiter:junit-jupiter-engine:$junit")
             library("junit-params", "org.junit.jupiter:junit-jupiter-params:$junit")
+
+            val guava: String by settings
+            library("guava", "com.google.guava:guava:$guava")
         }
 
     }

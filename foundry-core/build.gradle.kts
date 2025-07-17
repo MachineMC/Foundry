@@ -3,6 +3,10 @@ plugins {
     `maven-publish`
 }
 
+dependencies {
+    implementation(libs.guava)
+}
+
 publishing {
     repositories {
         maven {

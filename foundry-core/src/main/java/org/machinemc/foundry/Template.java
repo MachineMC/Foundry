@@ -103,6 +103,17 @@ public final class Template<T> implements Iterable<Field> {
     }
 
     /**
+     * Sets the accessibility of the fields of this template.
+     *
+     * @param accessible accessibility
+     */
+    public void setAccessible(boolean accessible) {
+        for (Field field : fields) {
+            field.setAccessible(accessible);
+        }
+    }
+
+    /**
      * Returns an iterator over the field entries in this template.
      *
      * @return a list iterator for the field entries

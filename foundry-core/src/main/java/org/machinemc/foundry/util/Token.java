@@ -29,8 +29,10 @@ public abstract class Token<__> {
      * @return the captured type
      */
     public AnnotatedType get() {
-        AnnotatedParameterizedType superclass = (AnnotatedParameterizedType) getClass().getAnnotatedSuperclass();
-        return superclass.getAnnotatedActualTypeArguments()[0];
+        AnnotatedType superType = getClass().getAnnotatedSuperclass();
+        if (!(superType instanceof AnnotatedParameterizedType apt))
+            throw new IllegalArgumentException("The token has not parameter");
+        return apt.getAnnotatedActualTypeArguments()[0];
     }
 
     protected Token() {

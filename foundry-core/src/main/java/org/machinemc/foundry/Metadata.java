@@ -31,11 +31,10 @@ public final class Metadata implements Cloneable {
      * @param <T> requested data type
      * @return value associated with the given key if its type is compatible with the requested one, else empty
      */
-    @SuppressWarnings("unchecked")
     public <T> Optional<T> get(String key, Class<T> type) {
         Object found = data.get(key);
         if (!type.isInstance(found)) return Optional.empty();
-        return Optional.of((T) found);
+        return Optional.of(type.cast(found));
     }
 
     /**

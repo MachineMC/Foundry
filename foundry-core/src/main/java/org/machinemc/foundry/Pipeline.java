@@ -1,7 +1,10 @@
 package org.machinemc.foundry;
 
 import com.google.common.base.Preconditions;
+import com.google.errorprone.annotations.Immutable;
+import com.google.errorprone.annotations.ThreadSafe;
 import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.Unmodifiable;
 
 import java.util.Collections;
 import java.util.LinkedList;
@@ -18,9 +21,11 @@ import java.util.SequencedCollection;
  * @param <I> the input type of the entire pipeline
  * @param <O> the final output type of the entire pipeline
  */
+@Immutable
+@ThreadSafe
 public final class Pipeline<I, O> {
 
-    private final List<DataHandler<?, ?>> handlers;
+    private final @Unmodifiable List<DataHandler<?, ?>> handlers;
 
     private Pipeline(SequencedCollection<DataHandler<?, ?>> handlers) {
         this.handlers = Collections.unmodifiableList(new LinkedList<>(handlers));

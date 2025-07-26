@@ -1,9 +1,8 @@
-package org.machinemc.foundry;
+package org.machinemc.foundry.util;
 
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.machinemc.foundry.util.Token;
-import org.machinemc.foundry.util.TypeUtils;
 
 import java.io.Serializable;
 import java.lang.reflect.ParameterizedType;
@@ -13,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
+@DisplayName("TypeUtil Tests")
 class TypeUtilsTest {
 
     @Test

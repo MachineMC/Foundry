@@ -1,18 +1,22 @@
 package org.machinemc.foundry.util;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.BiMap;
+import com.google.common.collect.HashBiMap;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.*;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Queue;
 
 /**
  * Utility class for operations involving Java {@link Type}s.
  */
 public final class TypeUtils {
 
-    private static final Map<Class<?>, Class<?>> PRIMITIVE_WRAPPERS = new HashMap<>();
+    private static final BiMap<Class<?>, Class<?>> PRIMITIVE_WRAPPERS = HashBiMap.create(9);
 
     static {
         PRIMITIVE_WRAPPERS.put(boolean.class, Boolean.class);
@@ -184,6 +188,47 @@ public final class TypeUtils {
         if (type instanceof GenericArrayType gat)
             return gat.getGenericComponentType();
         return null;
+    }
+
+    /**
+     * Calculates the shortest distance in the inheritance hierarchy from a subtype to a supertype.
+     * Distance to self is 0, to direct superclass/interface is 1, and so on.
+     *
+     * @param subType the starting class (subtype)
+     * @param superType the target class (supertype)
+     * @return the inheritance distance, or -1 if not related
+     */
+    public static int getDistance(Class<?> subType, Class<?> superType) {
+        if (subType == null || superType == null) return -1;
+
+        // BFS to find the shortest path in the unweighted inheritance graph
+        Queue<Class<?>> queue = new ArrayDeque<>();
+        Map<Class<?>, Integer> distances = new HashMap<>();
+
+        queue.add(subType);
+        distances.put(subType, 0);
+
+        while (!queue.isEmpty()) {
+            Class<?> current = queue.poll();
+            int distance = distances.get(current);
+
+            if (current.equals(superType))
+                return distance;
+
+            Class<?> parent = current.getSuperclass();
+            if (parent != null && !distances.containsKey(parent)) {
+                distances.put(parent, distance + 1);
+                queue.add(parent);
+            }
+
+            for (Class<?> interfaceType : current.getInterfaces()) {
+                if (distances.containsKey(interfaceType)) continue;
+                distances.put(interfaceType, distance + 1);
+                queue.add(interfaceType);
+            }
+        }
+
+        return -1;
     }
 
 }

@@ -1,5 +1,7 @@
 package org.machinemc.foundry.visitor;
 
+import org.machinemc.foundry.AllowNull;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -14,6 +16,9 @@ import java.lang.annotation.Target;
  * {@link Visit} annotated method that matches the object's type. This respects annotations
  * and generics, visitor for {@code List<String>} will not be invoked with {@code List<Integer>}
  * and visitor for {@code @Foo int} will not be invoked with {@code @Bar int}.
+ * <p>
+ * For the {@link Visit} annotated method to accept {@code null}, the data type of object
+ * to visit needs to be annotated with {@link AllowNull}.
  *
  * <p><b>Method Signature</b></p>
  * Methods annotated with {@link Visit} must conform to the following signature:
@@ -40,15 +45,12 @@ import java.lang.annotation.Target;
  * @see Visitor
  * @see VisitorHandler
  */
+// TODO Visit methods should also accept the AnnotationType used to find the visit method,
+//  so visits of e.g. collections can properly visit using the element type if it includes generics, annotations;
+//  e.g. List<List<String>>, List<@VarInt Integer>
+// TODO instead of getting the data from previous visit as a parameter and returning the data for next visit,
+//  add a structure for this (something like pair with modifiable right side?) and provide it as a parameter
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface Visit {
-
-    /**
-     * Whether the visit method accepts null values in the place of {@code T object}.
-     *
-     * @return true if the visit method accepts null, else false
-     */
-    boolean nullable() default false;
-
 }

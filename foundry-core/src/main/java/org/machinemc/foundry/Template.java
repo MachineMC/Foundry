@@ -13,6 +13,8 @@ import java.util.*;
  *
  * @param <T> the source class this template is created from
  */
+// TODO does not work for records,
+//  replace Field with its own Field representation
 public final class Template<T> implements Iterable<Field> {
 
     private final Class<T> sourceClass;

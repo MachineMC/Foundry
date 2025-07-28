@@ -2,7 +2,6 @@ package org.machinemc.foundry.visitor;
 
 import com.google.common.base.Preconditions;
 import com.google.errorprone.annotations.Immutable;
-import com.google.errorprone.annotations.ThreadSafe;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 import org.machinemc.foundry.DataHandler;
@@ -30,7 +29,9 @@ import java.util.stream.Stream;
  * and for each field, it dynamically dispatches the call to the most suitable {@code @Visit}
  * method based on the field's runtime type, including generics and annotations.
  * <p>
- * This class is immutable and thread-safe after construction.
+ * This class is immutable after construction.
+ * <p>
+ * For the handler to be thread-safe, the modules also need to be thread safe.
  *
  * @param <I> input data type to be visited.
  * @param <O> output data type which is accumulated during the visitation process
@@ -38,7 +39,6 @@ import java.util.stream.Stream;
  * @see Visit
  */
 @Immutable
-@ThreadSafe
 public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
 
     /**
@@ -52,6 +52,7 @@ public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
      * @param <O> the output type
      * @return a new instance of {@link VisitorHandler}
      */
+    // TODO builder pattern
     public static <I, O> VisitorHandler<I, O> fromModules(Class<I> inputType,
                                                           Class<O> outputType,
                                                           Supplier<O> emptyOutput,
@@ -138,8 +139,9 @@ public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
         O output = emptyOutput.get();
 
         for (Field field : inputTemplate) {
-            Object value = field.get(instance); // TODO possibly avoid reflection with asm
-            // TODO implement handling for nullable values based on the @Visit#nullable=true
+            Object value = field.get(instance);
+            Preconditions.checkNotNull(value, "Visitor module does not accept null values");
+            // TODO consider @AllowNull annotation for nulls
             output = visit(output, value, field.getAnnotatedType());
         }
 

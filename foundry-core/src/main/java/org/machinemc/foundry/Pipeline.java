@@ -32,6 +32,16 @@ public final class Pipeline<I, O> {
     }
 
     /**
+     * Creates a new builder to construct a pipeline.
+     *
+     * @param <F> the input type of the first handler (and the pipeline)
+     * @return a new builder instance
+     */
+    public static <F> Builder<F, F> builder() {
+        return builder(DataHandler.identity());
+    }
+
+    /**
      * Creates a new builder to construct a pipeline, starting with the first handler.
      *
      * @param handler the first data handler, which defines the initial input type

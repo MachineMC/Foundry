@@ -14,6 +14,17 @@ package org.machinemc.foundry;
 public interface DataHandler<I, O> {
 
     /**
+     * Returns a {@link DataHandler} that performs an identity transformation.
+     * That is, it returns the same instance as it receives.
+     *
+     * @param <T> data type
+     * @return identity data handler
+     */
+    static <T> DataHandler<T, T> identity() {
+        return o -> o;
+    }
+
+    /**
      * Processes the given instance of type {@link I} and transforms it into an instance of type {@link O}.
      *
      * @param instance input data

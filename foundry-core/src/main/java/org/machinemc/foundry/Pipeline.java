@@ -2,7 +2,6 @@ package org.machinemc.foundry;
 
 import com.google.common.base.Preconditions;
 import com.google.errorprone.annotations.Immutable;
-import com.google.errorprone.annotations.ThreadSafe;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Unmodifiable;
 
@@ -22,7 +21,6 @@ import java.util.SequencedCollection;
  * @param <O> the final output type of the entire pipeline
  */
 @Immutable
-@ThreadSafe
 public final class Pipeline<I, O> {
 
     private final @Unmodifiable List<DataHandler<?, ?>> handlers;
@@ -76,7 +74,8 @@ public final class Pipeline<I, O> {
      *
      * @return new, combined pipeline.
      */
-    public static <A, B, C, D, E> Pipeline<A, E> compose(Pipeline<A, B> p1, Pipeline<B, C> p2, Pipeline<C, D> p3, Pipeline<D, E> p4) {
+    public static <A, B, C, D, E> Pipeline<A, E> compose(Pipeline<A, B> p1, Pipeline<B, C> p2,
+                                                         Pipeline<C, D> p3, Pipeline<D, E> p4) {
         return compose(List.of(p1, p2, p3, p4));
     }
 
@@ -85,7 +84,8 @@ public final class Pipeline<I, O> {
      *
      * @return new, combined pipeline.
      */
-    public static <A, B, C, D, E, F> Pipeline<A, F> compose(Pipeline<A, B> p1,Pipeline<B, C> p2, Pipeline<C, D> p3, Pipeline<D, E> p4, Pipeline<E, F> p5) {
+    public static <A, B, C, D, E, F> Pipeline<A, F> compose(Pipeline<A, B> p1,Pipeline<B, C> p2, Pipeline<C, D> p3,
+                                                            Pipeline<D, E> p4, Pipeline<E, F> p5) {
         return compose(List.of(p1, p2, p3, p4, p5));
     }
 

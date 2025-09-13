@@ -3,7 +3,8 @@ package org.machinemc.foundry;
 /**
  * Represents a single processing step within a {@link Pipeline}.
  * <p>
- * {@link DataHandler} is responsible for transforming an input data type {@link I} (from) into an output data type {@link O} (to).
+ * {@link DataHandler} is responsible for transforming an input data type {@link I} (from) into an output data type
+ * {@link O} (to).
  * <p>
  * Each handler performs a specific operation, such as encoding, decoding, compression, or data validation.
  *

@@ -72,18 +72,9 @@ public record Codec<A, B>(Pipeline<A, B> encode, Pipeline<B, A> decode) {
      * @return new composed codec
      * @see #compose(Codec, Codec)
      */
-    public static <A, B, C, D, E, F> Codec<A, F> compose(Codec<A, B> c1, Codec<B, C> c2, Codec<C, D> c3, Codec<D, E> c4, Codec<E, F> c5) {
+    public static <A, B, C, D, E, F> Codec<A, F> compose(Codec<A, B> c1, Codec<B, C> c2, Codec<C, D> c3,
+                                                         Codec<D, E> c4, Codec<E, F> c5) {
         return compose(compose(c1, c2, c3, c4), c5);
-    }
-
-    /**
-     * Joins another codec to this one.
-     *
-     * @param other other codec to join
-     * @return new composed codec
-     */
-    public <C> Codec<A, C> join(Codec<B, C> other) {
-        return compose(this, other);
     }
 
     /**

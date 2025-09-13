@@ -19,9 +19,9 @@ import java.lang.reflect.AnnotatedType;
  *
  * }</pre>
  *
- * @param <__> The generic type to be captured
+ * @param <T> The generic type to be captured
  */
-public abstract class Token<__> {
+public abstract class Token<T> {
 
     /**
      * Returns the captured full type of this token.

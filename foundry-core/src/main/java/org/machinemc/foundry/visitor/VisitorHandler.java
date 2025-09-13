@@ -4,9 +4,9 @@ import com.google.common.base.Preconditions;
 import com.google.errorprone.annotations.Immutable;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
+import org.machinemc.foundry.AllowNull;
 import org.machinemc.foundry.DataHandler;
 import org.machinemc.foundry.Template;
-import org.machinemc.foundry.util.Sneaky;
 import org.machinemc.foundry.util.TypeUtils;
 
 import java.lang.annotation.Annotation;
@@ -15,6 +15,7 @@ import java.lang.reflect.AnnotatedType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -42,32 +43,27 @@ import java.util.stream.Stream;
 public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
 
     /**
-     * Creates a new {@link VisitorHandler} from a collection of modules.
+     * Creates a new {@link Builder} for a {@link VisitorHandler}.
      *
      * @param inputType the type of the input object
      * @param outputType the type of the output object
      * @param emptyOutput a supplier for creating a new, empty output instance
-     * @param modules a collection of objects containing methods annotated with {@link Visit}
      * @param <I> the input type
      * @param <O> the output type
-     * @return a new instance of {@link VisitorHandler}
+     * @return a new instance of {@link Builder}
      */
-    // TODO builder pattern
-    public static <I, O> VisitorHandler<I, O> fromModules(Class<I> inputType,
-                                                          Class<O> outputType,
-                                                          Supplier<O> emptyOutput,
-                                                          Object... modules) {
-        return new VisitorHandler<>(inputType, outputType, emptyOutput, modules);
+    public static <I, O> Builder<I, O> builder(Class<I> inputType, Class<O> outputType, Supplier<O> emptyOutput) {
+        return new Builder<>(inputType, outputType, emptyOutput);
     }
 
+    private final Class<I> inputType;
     private final Class<O> outputType;
     private final Supplier<O> emptyOutput;
     private final @Unmodifiable Map<AnnotatedType, VisitorFactorySource> factoryMap;
-    private final Template<I> inputTemplate;
 
-    protected VisitorHandler(Class<I> inputType, Class<O> outputType, Supplier<O> emptyOutput) {
-        this(inputType, outputType, emptyOutput, Collections.emptyList());
-    }
+    private final transient Map<Class<? extends I>, Template<? extends I>> resolvedTemplateCache
+            = new ConcurrentHashMap<>();
+    private final transient Map<AnnotatedType, VisitorFactorySource> resolvedVisitorCache = new ConcurrentHashMap<>();
 
     protected VisitorHandler(Class<I> inputType, Class<O> outputType, Supplier<O> emptyOutput, Object... modules) {
         this(inputType, outputType, emptyOutput, List.of(modules));
@@ -81,13 +77,16 @@ public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
      * @param emptyOutput a supplier for creating a new, empty output instance
      * @param modules a collection of objects containing methods annotated with {@link Visit}
      */
-    protected VisitorHandler(Class<I> inputType, Class<O> outputType, Supplier<O> emptyOutput, Collection<Object> modules) {
+    protected VisitorHandler(Class<I> inputType, Class<O> outputType,
+                             Supplier<O> emptyOutput, Collection<Object> modules) {
+        this.inputType = Preconditions.checkNotNull(inputType, "Input type can not be null");
         this.outputType = Preconditions.checkNotNull(outputType, "Output type can not be null");
         this.emptyOutput = Preconditions.checkNotNull(emptyOutput, "Empty output supplier can not be null");
         Preconditions.checkNotNull(modules, "Modules for the visitor handler can not be null");
 
         Map<AnnotatedType, VisitorFactorySource> resolved = new LinkedHashMap<>();
         for (Object module : modules) {
+            Preconditions.checkNotNull(modules, "Module can not be null");
             Stream.concat(Arrays.stream(module.getClass().getMethods()),
                             Arrays.stream(module.getClass().getDeclaredMethods()))
                     .filter(method -> method.isAnnotationPresent(Visit.class))
@@ -95,29 +94,39 @@ public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
                     .peek(this::assureCorrectVisitMethod)
                     .forEach(method -> resolved.computeIfAbsent(
                             method.getAnnotatedParameterTypes()[2],
-                            Sneaky.function(key -> new VisitorFactorySource(
-                                    module,
-                                    (VisitorFactory<?, ?>) createVisitCallsite(method).getTarget().invokeExact()
-                            ))
+                            key -> {
+                                try {
+                                    boolean allowNull = method.getAnnotatedParameterTypes()[2]
+                                            .isAnnotationPresent(AllowNull.class);
+                                    //noinspection unchecked
+                                    return new VisitorFactorySource(
+                                            module,
+                                            (VisitorFactory<Object, Object>) createVisitCallsite(method)
+                                                    .getTarget().invokeExact(),
+                                            allowNull
+                                    );
+                                } catch (Throwable throwable) {
+                                    // should not happen and be caught by assureCorrectVisitMethod
+                                    throw new RuntimeException(throwable);
+                                }
+                            }
                     ));
         }
         this.factoryMap = Collections.unmodifiableMap(resolved);
-
-        Preconditions.checkNotNull(inputType, "Input type can not be null");
-        inputTemplate = Template.of(inputType);
-        inputTemplate.setAccessible(true);
     }
 
     private void assureCorrectVisitMethod(Method method) {
         String formatError = "Method " + method + " does not follow the proper @Visit method format. ";
         Preconditions.checkState(method.getReturnType() == outputType, formatError
                 + "The return type must be " + outputType.getName());
-        Preconditions.checkState(method.getParameterCount() == 3, formatError
-                + "The method must accept exactly 3 parameters.");
+        Preconditions.checkState(method.getParameterCount() == 4, formatError
+                + "The method must accept exactly 4 parameters.");
         Preconditions.checkState(method.getParameterTypes()[0] == Visitor.class, formatError
                 + "The first parameter must be " + Visitor.class.getName());
         Preconditions.checkState(method.getParameterTypes()[1] == outputType, formatError
                 + "The second parameter must be " + outputType.getName());
+        Preconditions.checkState(method.getParameterTypes()[3] == AnnotatedType.class, formatError
+                + "The fourth parameter must be " + AnnotatedType.class.getName());
         Preconditions.checkState(TypeUtils.getRawType(method.getParameterTypes()[2]) != null,
                 formatError + "The third parameter must be a raw type.");
     }
@@ -128,7 +137,8 @@ public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
         return LambdaMetafactory.metafactory(lookup,
                 "visit",
                 MethodType.methodType(VisitorFactory.class),
-                MethodType.methodType(Object.class, Object.class, Visitor.class, Object.class, Object.class),
+                MethodType.methodType(Object.class, Object.class, Visitor.class,
+                        Object.class, Object.class, AnnotatedType.class),
                 methodHandle,
                 methodHandle.type()
         );
@@ -136,12 +146,17 @@ public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
 
     @Override
     public O transform(I instance) throws Exception {
+        Preconditions.checkNotNull(instance, "Instance to transform can not be null");
+        Preconditions.checkArgument(inputType.isInstance(instance), "Can not transform instance of type "
+                + instance.getClass().getName());
+
         O output = emptyOutput.get();
 
-        for (Field field : inputTemplate) {
+        //noinspection unchecked
+        Template<? extends I> template = resolvedTemplateCache
+                .computeIfAbsent((Class<? extends I>) instance.getClass(), Template::of);
+        for (Field field : template) {
             Object value = field.get(instance);
-            Preconditions.checkNotNull(value, "Visitor module does not accept null values");
-            // TODO consider @AllowNull annotation for nulls
             output = visit(output, value, field.getAnnotatedType());
         }
 
@@ -149,8 +164,25 @@ public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T> O visit(O input, @Nullable T object, AnnotatedType type) {
+        Preconditions.checkNotNull(input, "Input data can not be null");
+        Preconditions.checkNotNull(type, "Type of the object can not be null");
+        Class<?> rawType = TypeUtils.getRawType(type);
+        if (rawType != null && object != null)
+            Preconditions.checkArgument(rawType.isInstance(object), "Provided type " + rawType.getName()
+                    + " for object of type " + object.getClass().getName());
+
+        VisitorFactorySource source = resolvedVisitorCache.computeIfAbsent(type, this::findBestVisitorForType);
+        return source.visit(source.module(), this, input, object, type);
+    }
+
+    /**
+     * Finds the most specific visitor for a given annotated type.
+     *
+     * @param type the annotated type to find a visitor for
+     * @return the best {@link VisitorFactorySource} for the given type
+     */
+    private VisitorFactorySource findBestVisitorForType(AnnotatedType type) {
         List<Map.Entry<AnnotatedType, VisitorFactorySource>> candidates = factoryMap.entrySet().stream()
                 .filter(entry -> TypeUtils.isCompatible(entry.getKey().getType(), type.getType()))
                 .toList();
@@ -158,23 +190,20 @@ public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
         Preconditions.checkState(!candidates.isEmpty(), "Could not find any visitor for type "
                 + type.getType().getTypeName());
 
-        if (candidates.size() == 1) {
-            VisitorFactorySource source = candidates.getFirst().getValue();
-            VisitorFactory<O, T> factory = (VisitorFactory<O, T>) source.visitorFactory();
-            return factory.visit(source.module(), this, input, object);
-        }
+        if (candidates.size() == 1)
+            return candidates.getFirst().getValue();
 
         List<Map.Entry<AnnotatedType, VisitorFactorySource>> tiedCandidates = new ArrayList<>();
         int minDistance = Integer.MAX_VALUE;
 
-        Class<?> rawInputType = TypeUtils.getRawType(type);
-        Preconditions.checkState(rawInputType != null, "Could not determine raw type of "
+        Class<?> rawType = TypeUtils.getRawType(type);
+        Preconditions.checkState(rawType != null, "Could not determine raw type of "
                 + type.getType().getTypeName());
 
         for (Map.Entry<AnnotatedType, VisitorFactorySource> candidate : candidates) {
             Class<?> rawCandidateType = TypeUtils.getRawType(candidate.getKey());
 
-            int distance = TypeUtils.getDistance(rawInputType, rawCandidateType);
+            int distance = TypeUtils.getDistance(rawType, rawCandidateType);
             if (distance < 0) continue;
 
             if (distance < minDistance) {
@@ -189,20 +218,17 @@ public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
         Preconditions.checkState(!tiedCandidates.isEmpty(), "Could not find a specific visitor for type "
                 + type.getType().getTypeName());
 
-        if (tiedCandidates.size() == 1) {
-            VisitorFactorySource source = tiedCandidates.getFirst().getValue();
-            VisitorFactory<O, T> factory = (VisitorFactory<O, T>) source.visitorFactory();
-            return factory.visit(source.module(), this, input, object);
-        }
+        if (tiedCandidates.size() == 1)
+            return tiedCandidates.getFirst().getValue();
 
         Map.Entry<AnnotatedType, VisitorFactorySource> finalWinner = null;
         long maxAnnotationScore = -1;
 
-        Set<Annotation> inputAnnotations = Set.of(type.getAnnotations());
+        Set<Annotation> annotations = Set.of(type.getAnnotations());
 
         for (Map.Entry<AnnotatedType, VisitorFactorySource> candidate : tiedCandidates) {
             long score = Arrays.stream(candidate.getKey().getAnnotations())
-                    .filter(inputAnnotations::contains)
+                    .filter(annotations::contains)
                     .count();
 
             if (score > maxAnnotationScore) {
@@ -211,9 +237,7 @@ public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
             }
         }
 
-        VisitorFactorySource finalSource = finalWinner.getValue();
-        VisitorFactory<O, T> factory = (VisitorFactory<O, T>) finalSource.visitorFactory();
-        return factory.visit(finalSource.module(), this, input, object);
+        return finalWinner.getValue();
     }
 
     /**
@@ -221,8 +245,18 @@ public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
      *
      * @param module module (origin of the visitor factory)
      * @param visitorFactory visitor factory
+     * @param allowNull whether the visitor method accepts null values
      */
-    private record VisitorFactorySource(Object module, VisitorFactory<?, ?> visitorFactory) {
+    private record VisitorFactorySource(Object module, VisitorFactory<Object, Object> visitorFactory,
+                                        boolean allowNull) {
+
+        private <O, T> O visit(Object module, Visitor<O> visitor, O input, T object, AnnotatedType type) {
+            Preconditions.checkArgument(object != null || allowNull, "Failed to pass null value "
+                    + "for type " + TypeUtils.getRawType(type) + " for module " + module.getClass().getName());
+            //noinspection unchecked
+            return (O) visitorFactory.visit(module, (Visitor<Object>) visitor, input, object, type);
+        }
+
     }
 
     /**
@@ -233,7 +267,51 @@ public class VisitorHandler<I, O> implements DataHandler<I, O>, Visitor<O> {
      */
     @FunctionalInterface
     private interface VisitorFactory<O, T> {
-        O visit(Object module, Visitor<O> visitor, O input, T object);
+
+        O visit(Object module, Visitor<O> visitor, O input, T object, AnnotatedType type);
+
+    }
+
+    /**
+     * Builder for the {@link VisitorHandler}.
+     *
+     * @param <I> input data type to be visited
+     * @param <O> output data type which is accumulated during the visitation process
+     */
+    public static final class Builder<I, O> {
+
+        private final Class<I> inputType;
+        private final Class<O> outputType;
+        private final Supplier<O> emptyOutput;
+        private final List<Object> modules = new ArrayList<>();
+
+        private Builder(Class<I> inputType, Class<O> outputType, Supplier<O> emptyOutput) {
+            this.inputType = Preconditions.checkNotNull(inputType, "Input type can not be null");
+            this.outputType = Preconditions.checkNotNull(outputType, "Output type can not be null");
+            this.emptyOutput = Preconditions.checkNotNull(emptyOutput, "Empty output supplier can not be null");
+        }
+
+        /**
+         * Adds modules to the builder.
+         *
+         * @param modules modules to add
+         * @return this builder
+         */
+        public Builder<I, O> addModules(Object... modules) {
+            Preconditions.checkNotNull(modules, "Modules can not be null");
+            this.modules.addAll(List.of(modules));
+            return this;
+        }
+
+        /**
+         * Builds the {@link VisitorHandler}.
+         *
+         * @return a new instance of {@link VisitorHandler}
+         */
+        public VisitorHandler<I, O> build() {
+            return new VisitorHandler<>(inputType, outputType, emptyOutput, modules);
+        }
+
     }
 
 }

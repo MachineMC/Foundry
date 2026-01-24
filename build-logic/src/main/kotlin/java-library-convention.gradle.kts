@@ -28,6 +28,7 @@ dependencies {
     testImplementation(libs.findLibrary("junit-api").get())
     testRuntimeOnly(libs.findLibrary("junit-engine").get())
     testImplementation(libs.findLibrary("junit-params").get())
+    testRuntimeOnly(libs.findLibrary("junit-platform-launcher").get())
 }
 
 //
@@ -35,8 +36,8 @@ dependencies {
 //
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
     withSourcesJar()
 }
 
@@ -46,7 +47,7 @@ java {
 
 tasks {
     withType<JavaCompile> {
-        options.release.set(21)
+        options.release.set(25)
         options.encoding = Charsets.UTF_8.name()
     }
     test {

@@ -1,14 +1,15 @@
 package org.machinemc.foundry.util;
 
 import com.google.common.base.Preconditions;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.Arrays;
 
 /**
- * A factory for creating {@link AnnotatedType} instances from standard {@link Type} instances,
- * correctly mapping the Type hierarchy to the AnnotatedType hierarchy.
+ * A factory for creating {@link AnnotatedType} instances from standard {@link Type} instances.
  */
 public final class AnnotatedTypeFactory {
 
@@ -22,8 +23,11 @@ public final class AnnotatedTypeFactory {
         return create(type, null);
     }
 
-    private static AnnotatedType create(Type type, AnnotatedType owner) {
+    private static AnnotatedType create(Type type, @Nullable AnnotatedType owner) {
         Preconditions.checkNotNull(type, "Type can not be null");
+        if (owner == null && type instanceof ParameterizedType pt && pt.getOwnerType() != null) {
+            owner = create(pt.getOwnerType(), null);
+        }
         return switch (type) {
             case Class<?> c -> {
                 if (c.isArray()) yield new AnnotatedArrayTypeImpl(c, owner);
@@ -58,17 +62,17 @@ public final class AnnotatedTypeFactory {
         }
 
         @Override
-        public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
+        public <T extends Annotation> T getAnnotation(@NotNull Class<T> annotationClass) {
             return null;
         }
 
         @Override
-        public Annotation[] getAnnotations() {
+        public Annotation @NotNull [] getAnnotations() {
             return new Annotation[0];
         }
 
         @Override
-        public Annotation[] getDeclaredAnnotations() {
+        public Annotation @NotNull [] getDeclaredAnnotations() {
             return new Annotation[0];
         }
 
@@ -89,12 +93,12 @@ public final class AnnotatedTypeFactory {
         private AnnotatedParameterizedTypeImpl(ParameterizedType type, AnnotatedType owner) {
             super(type, owner);
             this.typeArgs = Arrays.stream(type.getActualTypeArguments())
-                    .map(t -> AnnotatedTypeFactory.create(t, this))
+                    .map(t -> AnnotatedTypeFactory.create(t, null))
                     .toArray(AnnotatedType[]::new);
         }
 
         @Override
-        public AnnotatedType[] getAnnotatedActualTypeArguments() {
+        public AnnotatedType @NotNull [] getAnnotatedActualTypeArguments() {
             return typeArgs;
         }
 
@@ -112,11 +116,11 @@ public final class AnnotatedTypeFactory {
             } else {
                 genericComponentType = ((Class<?>) type).getComponentType();
             }
-            this.componentType = AnnotatedTypeFactory.create(genericComponentType, this);
+            this.componentType = AnnotatedTypeFactory.create(genericComponentType, null);
         }
 
         @Override
-        public AnnotatedType getAnnotatedGenericComponentType() {
+        public @NotNull AnnotatedType getAnnotatedGenericComponentType() {
             return componentType;
         }
 
@@ -129,9 +133,9 @@ public final class AnnotatedTypeFactory {
         }
 
         @Override
-        public AnnotatedType[] getAnnotatedBounds() {
+        public AnnotatedType @NotNull [] getAnnotatedBounds() {
             return Arrays.stream(((TypeVariable<?>) type).getBounds())
-                    .map(t -> AnnotatedTypeFactory.create(t, this))
+                    .map(t -> AnnotatedTypeFactory.create(t, null))
                     .toArray(AnnotatedType[]::new);
         }
 
@@ -144,16 +148,16 @@ public final class AnnotatedTypeFactory {
         }
 
         @Override
-        public AnnotatedType[] getAnnotatedLowerBounds() {
+        public AnnotatedType @NotNull [] getAnnotatedLowerBounds() {
             return Arrays.stream(((WildcardType) type).getLowerBounds())
-                    .map(t -> AnnotatedTypeFactory.create(t, this))
+                    .map(t -> AnnotatedTypeFactory.create(t, null))
                     .toArray(AnnotatedType[]::new);
         }
 
         @Override
-        public AnnotatedType[] getAnnotatedUpperBounds() {
+        public AnnotatedType @NotNull [] getAnnotatedUpperBounds() {
             return Arrays.stream(((WildcardType) type).getUpperBounds())
-                    .map(t -> AnnotatedTypeFactory.create(t, this))
+                    .map(t -> AnnotatedTypeFactory.create(t, null))
                     .toArray(AnnotatedType[]::new);
         }
 

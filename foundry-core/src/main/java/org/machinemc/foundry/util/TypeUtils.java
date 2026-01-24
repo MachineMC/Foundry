@@ -67,6 +67,8 @@ public final class TypeUtils {
         if (actualClass == null) return false;
         if (expected.isPrimitive()) expected = PRIMITIVE_WRAPPERS.get(expected);
         if (actualClass.isPrimitive()) actualClass = PRIMITIVE_WRAPPERS.get(actualClass);
+        assert expected != null;
+        assert actualClass != null;
         return expected.isAssignableFrom(actualClass);
     }
 

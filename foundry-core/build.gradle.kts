@@ -5,6 +5,8 @@ plugins {
 
 dependencies {
     implementation(libs.guava)
+    implementation(libs.asm)
+    implementation(libs.asm.commons)
 }
 
 publishing {

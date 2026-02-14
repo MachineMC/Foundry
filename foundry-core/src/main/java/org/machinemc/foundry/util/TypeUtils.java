@@ -33,6 +33,14 @@ public final class TypeUtils {
     private TypeUtils() {
     }
 
+    public static Class<?> box(Class<?> primitive) {
+        return PRIMITIVE_WRAPPERS.get(primitive);
+    }
+
+    public static Class<?> unbox(Class<?> boxed) {
+        return PRIMITIVE_WRAPPERS.inverse().get(boxed);
+    }
+
     /**
      * Checks if a variable of an {@code expected} type can be assigned a value of an
      * {@code actual} type, following Java's assignment and subtyping rules.

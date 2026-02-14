@@ -9,19 +9,15 @@ import org.objectweb.asm.commons.Method;
 import org.objectweb.asm.signature.SignatureWriter;
 
 import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Modifier;
+import java.lang.reflect.*;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class ClassAccess {
-    
+
     private static final Map<FieldAccessKey<?>, FieldAccess<?, ?>> fieldCache = new ConcurrentHashMap<>();
     private static final Map<MethodAccessKey<?>, MethodAccess<?, ?>> methodCache = new ConcurrentHashMap<>();
-
 
     private ClassAccess() {}
 
@@ -105,35 +101,42 @@ public final class ClassAccess {
     }
 
     public static <S, T> FieldAccess<S, T> field(Class<S> source, String name) throws NoSuchFieldException {
-        return fieldAccess(FieldAccessKey.of(source, name));
+        return fieldAccess(new FieldAccessKey<>(source, name));
     }
 
-    private static <S, T> FieldAccess<S, T> fieldAccess(FieldAccessKey<S> key) {
-        //noinspection unchecked
-        return (FieldAccess<S, T>) fieldCache.computeIfAbsent(key, k -> {
-            Class<?> aClass = defineHiddenIn(key.source(), generateFieldAccess(key));
+    private static <S, T> FieldAccess<S, T> fieldAccess(FieldAccessKey<S> key) throws NoSuchFieldException {
+        FieldAccess<?, ?> fieldAccess = fieldCache.get(key);
+        if (fieldAccess == null) {
+            Class<?> generated = defineHiddenIn(key.source(), generateFieldAccess(key));
             try {
-                return (FieldAccess<?, ?>) aClass.getDeclaredConstructor().newInstance();
-            } catch (InstantiationException | InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
+                fieldAccess = (FieldAccess<?, ?>) generated.getDeclaredConstructor().newInstance();
+                fieldCache.put(key, fieldAccess);
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
                 throw new RuntimeException(e); // Should not happen
             }
-        });
+        }
+        //noinspection unchecked
+        return (FieldAccess<S, T>) fieldAccess;
+
     }
 
     public static <S, T> MethodAccess<S, T> method(Class<S> source, String name, Class<?>... parameters) throws NoSuchMethodException {
-        return methodAccess(MethodAccessKey.of(source, name, parameters));
+        return methodAccess(new MethodAccessKey<>(source, name, parameters));
     }
 
-    private static <S, T> MethodAccess<S, T> methodAccess(MethodAccessKey<S> key) {
-        //noinspection unchecked
-        return (MethodAccess<S, T>) methodCache.computeIfAbsent(key, k -> {
-            Class<?> aClass = defineHiddenIn(key.source(), generateMethodAccess(key));
+    private static <S, T> MethodAccess<S, T> methodAccess(MethodAccessKey<S> key) throws NoSuchMethodException {
+        MethodAccess<?, ?> methodAccess = methodCache.get(key);
+        if (methodAccess == null) {
+            Class<?> generated = defineHiddenIn(key.source(), generateMethodAccess(key));
             try {
-                return (MethodAccess<?, ?>) aClass.getDeclaredConstructor().newInstance();
-            } catch (InstantiationException | InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
+                methodAccess = (MethodAccess<?, ?>) generated.getDeclaredConstructor().newInstance();
+                methodCache.put(key, methodAccess);
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
                 throw new RuntimeException(e); // Should not happen
             }
-        });
+        }
+        //noinspection unchecked
+        return (MethodAccess<S, T>) methodAccess;
     }
 
     private static Class<?> defineHiddenIn(Class<?> host, byte[] bytes) {
@@ -146,13 +149,16 @@ public final class ClassAccess {
         }
     }
 
-    private static byte[] generateFieldAccess(FieldAccessKey<?> key) {
+    private static byte[] generateFieldAccess(FieldAccessKey<?> key) throws NoSuchFieldException {
         Type objectT = Type.getType(Object.class);
         Type fieldAccessT = Type.getType(FieldAccess.class);
         Type sourceT = Type.getType(key.source());
-        Type fieldT = Type.getType(key.type());
-        Class<?> boxedField = TypeUtils.box(key.type());
+
+        Field field = key.field();
+        Type fieldT = Type.getType(field.getType());
+        Class<?> boxedField = TypeUtils.box(field.getType());
         Type boxedFieldT = boxedField != null ? Type.getType(boxedField) : fieldT;
+        boolean isStatic = Modifier.isStatic(field.getModifiers());
 
         ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
 
@@ -172,12 +178,12 @@ public final class ClassAccess {
         GeneratorAdapter ga = new GeneratorAdapter(mv, Opcodes.ACC_PUBLIC, "get", getterDesc);
 
         ga.visitCode();
-        if (!key.isStatic()) {
+        if (isStatic) {
+            ga.getStatic(sourceT, key.name(), fieldT);
+        } else {
             ga.loadArg(0);
             ga.checkCast(sourceT);
             ga.getField(sourceT, key.name(), fieldT);
-        } else {
-            ga.getStatic(sourceT, key.name(), fieldT);
         }
         ga.box(fieldT);
         ga.returnValue();
@@ -188,19 +194,19 @@ public final class ClassAccess {
         ga = new GeneratorAdapter(mv, Opcodes.ACC_PUBLIC, "set", setterDesc);
 
         ga.visitCode();
-        if (key.constant()) {
-            ga.throwException(Type.getType(IllegalAccessException.class), "Cannot modify final field " + key.readable());
+        if (Modifier.isFinal(field.getModifiers())) {
+            ga.throwException(Type.getType(IllegalAccessException.class), "Cannot modify final field " + field);
         } else {
-            if (!key.isStatic()) {
+            if (isStatic) {
+                ga.loadArg(1);
+                ga.unbox(fieldT);
+                ga.putStatic(sourceT, key.name(), fieldT);
+            } else {
                 ga.loadArg(0);
                 ga.checkCast(sourceT);
                 ga.loadArg(1);
                 ga.unbox(fieldT);
                 ga.putField(sourceT, key.name(), fieldT);
-            } else {
-                ga.loadArg(1);
-                ga.unbox(fieldT);
-                ga.putStatic(sourceT, key.name(), fieldT);
             }
             ga.returnValue();
         }
@@ -210,12 +216,16 @@ public final class ClassAccess {
         return cw.toByteArray();
     }
 
-    private static byte[] generateMethodAccess(MethodAccessKey<?> key) {
+    private static byte[] generateMethodAccess(MethodAccessKey<?> key) throws NoSuchMethodException {
         Type objectT = Type.getType(Object.class);
         Type methodAccessT = Type.getType(MethodAccess.class);
         Type sourceT = Type.getType(key.source());
-        Type returnTypeT = Type.getType(key.returnType());
-        Class<?> boxedReturnType = TypeUtils.box(key.returnType());
+
+        Executable executable = key.executable();
+
+        Class<?> returnType = key.constructor() ? key.source() : ((java.lang.reflect.Method) executable).getReturnType();
+        Type returnTypeT = key.constructor() ? sourceT : Type.getType(returnType);
+        Class<?> boxedReturnType = TypeUtils.box(returnType);
         Type boxedReturnTypeT = boxedReturnType != null ? Type.getType(boxedReturnType) : returnTypeT;
         Type[] parametersT = Arrays.stream(key.parameters()).map(Type::getType).toArray(Type[]::new);
 
@@ -242,7 +252,7 @@ public final class ClassAccess {
             ga.dup();
             loadArgs(ga, key.parameters());
             ga.invokeConstructor(sourceT, new Method(key.name(), Type.VOID_TYPE, parametersT));
-        } else if (key.isStatic()) {
+        } else if (Modifier.isStatic(executable.getModifiers())) {
             loadArgs(ga, key.parameters());
             ga.invokeStatic(sourceT, new Method(key.name(), returnTypeT, parametersT));
 
@@ -328,46 +338,35 @@ public final class ClassAccess {
         T invoke(S source, Object... args);
     }
 
-    private record FieldAccessKey<S>(Class<? extends S> source, String name, Class<?> type, boolean constant, boolean isStatic) {
+    private record FieldAccessKey<S>(Class<? extends S> source, String name) {
 
-        public String readable() {
-            return (isStatic ? "static " : "") + type.getName() + " " + source.getName() + "." + name;
-        }
-
-        public static <S> FieldAccessKey<S> of(Class<? extends S> source, String name) throws NoSuchFieldException {
-            Field field = source.getDeclaredField(name);
-            int modifiers = field.getModifiers();
-            return new FieldAccessKey<>(source, name, field.getType(), (modifiers & Modifier.FINAL) != 0, (modifiers & Modifier.STATIC) != 0);
+        public Field field() throws NoSuchFieldException {
+            return source.getDeclaredField(name);
         }
 
     }
 
-    private record MethodAccessKey<S>(Class<? extends S> source, String name, Class<?> returnType, Class<?>[] parameters, boolean isStatic) {
-
-        public static <S> MethodAccessKey<S> of(Class<? extends S> source, String name, Class<?>[] parameters) throws NoSuchMethodException {
-            if ("<init>".equals(name)) {
-                Constructor<?> constructor = source.getDeclaredConstructor(parameters);
-                return new MethodAccessKey<>(source, name, source, constructor.getParameterTypes(), false);
-            }
-            java.lang.reflect.Method method = source.getDeclaredMethod(name, parameters);
-            return new MethodAccessKey<>(source, name, method.getReturnType(), method.getParameterTypes(), (method.getModifiers() & Modifier.STATIC) != 0);
-        }
+    private record MethodAccessKey<S>(Class<? extends S> source, String name, Class<?>[] parameters) {
 
         public boolean constructor() {
             return name.equals("<init>");
         }
 
+        public Executable executable() throws NoSuchMethodException {
+            return constructor() ? source.getDeclaredConstructor(parameters) : source.getDeclaredMethod(name, parameters);
+        }
+
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof MethodAccessKey<?>(Class<?> source1, String name1, Class<?> type, Class<?>[] parameters1, boolean aStatic)))
+            if (!(o instanceof MethodAccessKey<?>(Class<?> source1, String name1, Class<?>[] parameters1)))
                 return false;
 
-            return isStatic == aStatic && name.equals(name1) && returnType.equals(type) && Arrays.equals(parameters, parameters1) && source.equals(source1);
+            return name.equals(name1) && Arrays.equals(parameters, parameters1) && source.equals(source1);
         }
 
         @Override
         public int hashCode() {
-            return Arrays.deepHashCode(new Object[]{source, name, returnType, parameters, isStatic});
+            return Arrays.deepHashCode(new Object[]{source, name, parameters});
         }
 
     }

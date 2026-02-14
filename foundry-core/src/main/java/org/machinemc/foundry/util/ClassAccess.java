@@ -17,8 +17,8 @@ import java.util.function.Supplier;
 
 public final class ClassAccess {
 
-    private static final Map<FieldAccessKey<?>, FieldAccess<?, ?>> fieldCache = new ConcurrentHashMap<>();
-    private static final Map<MethodAccessKey<?>, MethodAccess<?, ?>> methodCache = new ConcurrentHashMap<>();
+    private static final Map<FieldAccessKey<?>, Result<FieldAccess<?, ?>, NoSuchFieldException>> fieldCache = new ConcurrentHashMap<>();
+    private static final Map<MethodAccessKey<?>, Result<MethodAccess<?, ?>, NoSuchMethodException>> methodCache = new ConcurrentHashMap<>();
 
     private ClassAccess() {}
 
@@ -107,27 +107,7 @@ public final class ClassAccess {
 
     private static <S, T> FieldAccess<S, T> fieldAccess(FieldAccessKey<S> key) throws NoSuchFieldException {
         //noinspection unchecked
-        FieldAccess<S, T> fieldAccess = (FieldAccess<S, T>) fieldCache.get(key);
-        if (fieldAccess != null)
-            return fieldAccess;
-
-        synchronized (fieldCache) {
-            //noinspection unchecked
-            fieldAccess = (FieldAccess<S, T>) fieldCache.get(key);
-            if (fieldAccess != null)
-                return fieldAccess;
-
-            Class<?> generated = defineHiddenIn(key.source(), generateFieldAccess(key));
-            try {
-                //noinspection unchecked
-                fieldAccess = (FieldAccess<S, T>) generated.getDeclaredConstructor().newInstance();
-                fieldCache.put(key, fieldAccess);
-            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-                throw new RuntimeException(e); // Should not happen
-            }
-        }
-
-        return fieldAccess;
+        return (FieldAccess<S, T>) memberAccess(fieldCache, key, () -> generateFieldAccess(key));
     }
 
     public static <S, T> MethodAccess<S, T> method(Class<S> source, String name, Class<?>... parameters) throws NoSuchMethodException {
@@ -136,27 +116,28 @@ public final class ClassAccess {
 
     private static <S, T> MethodAccess<S, T> methodAccess(MethodAccessKey<S> key) throws NoSuchMethodException {
         //noinspection unchecked
-        MethodAccess<S, T> methodAccess = (MethodAccess<S, T>) methodCache.get(key);
-        if (methodAccess != null)
-            return methodAccess;
+        return (MethodAccess<S, T>) memberAccess(methodCache, key, () -> generateMethodAccess(key));
+    }
 
-        synchronized (methodCache) {
-            //noinspection unchecked
-            methodAccess = (MethodAccess<S, T>) methodCache.get(key);
-            if (methodAccess != null)
-                return methodAccess;
-
-            Class<?> generated = defineHiddenIn(key.source(), generateMethodAccess(key));
-            try {
-                //noinspection unchecked
-                methodAccess = (MethodAccess<S, T>) generated.getDeclaredConstructor().newInstance();
-                methodCache.put(key, methodAccess);
-            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-                throw new RuntimeException(e); // Should not happen
-            }
-        }
-
-        return methodAccess;
+    private static <K extends MemberAccessKey<?>, V, E extends ReflectiveOperationException> V memberAccess(
+            Map<K, Result<V, E>> cache,
+            K key,
+            Supplier<Result<byte[], E>> generator
+    ) throws E {
+        return switch (cache.computeIfAbsent(key, _ -> generator.get()
+                .map(bytes -> defineHiddenIn(key.source(), bytes))
+                .map(generated -> {
+                    try {
+                        //noinspection unchecked
+                        return (V) generated.getDeclaredConstructor().newInstance();
+                    } catch (InvocationTargetException | InstantiationException | IllegalAccessException |
+                             NoSuchMethodException e) {
+                        throw new RuntimeException(e);
+                    }
+                }))) {
+            case Result.Ok(V value) -> value;
+            case Result.Err(E err) -> throw err;
+        };
     }
 
     private static Class<?> defineHiddenIn(Class<?> host, byte[] bytes) {
@@ -169,12 +150,17 @@ public final class ClassAccess {
         }
     }
 
-    private static byte[] generateFieldAccess(FieldAccessKey<?> key) throws NoSuchFieldException {
+    private static Result<byte[], NoSuchFieldException> generateFieldAccess(FieldAccessKey<?> key) {
         Type objectT = Type.getType(Object.class);
         Type fieldAccessT = Type.getType(FieldAccess.class);
         Type sourceT = Type.getType(key.source());
 
-        Field field = key.field();
+        Field field;
+        try {
+            field = key.field();
+        } catch (NoSuchFieldException e) {
+            return Result.err(e);
+        }
         Type fieldT = Type.getType(field.getType());
         Class<?> boxedField = TypeUtils.box(field.getType());
         Type boxedFieldT = boxedField != null ? Type.getType(boxedField) : fieldT;
@@ -233,15 +219,20 @@ public final class ClassAccess {
         ga.endMethod();
 
         cw.visitEnd();
-        return cw.toByteArray();
+        return Result.ok(cw.toByteArray());
     }
 
-    private static byte[] generateMethodAccess(MethodAccessKey<?> key) throws NoSuchMethodException {
+    private static Result<byte[], NoSuchMethodException> generateMethodAccess(MethodAccessKey<?> key) {
         Type objectT = Type.getType(Object.class);
         Type methodAccessT = Type.getType(MethodAccess.class);
         Type sourceT = Type.getType(key.source());
 
-        Executable executable = key.executable();
+        Executable executable;
+        try {
+            executable = key.executable();
+        } catch (NoSuchMethodException e) {
+            return Result.err(e);
+        }
 
         Class<?> returnType = key.constructor() ? key.source() : ((java.lang.reflect.Method) executable).getReturnType();
         Type returnTypeT = key.constructor() ? sourceT : Type.getType(returnType);
@@ -297,7 +288,7 @@ public final class ClassAccess {
         ga.endMethod();
 
         cw.visitEnd();
-        return cw.toByteArray();
+        return Result.ok(cw.toByteArray());
     }
 
     private static boolean isPrimitive(Type type) {
@@ -358,7 +349,12 @@ public final class ClassAccess {
         T invoke(S source, Object... args);
     }
 
-    private record FieldAccessKey<S>(Class<? extends S> source, String name) {
+    private interface MemberAccessKey<S> {
+        Class<? extends S> source();
+        String name();
+    }
+
+    private record FieldAccessKey<S>(Class<? extends S> source, String name) implements MemberAccessKey<S> {
 
         public Field field() throws NoSuchFieldException {
             return source.getDeclaredField(name);
@@ -366,7 +362,7 @@ public final class ClassAccess {
 
     }
 
-    private record MethodAccessKey<S>(Class<? extends S> source, String name, Class<?>[] parameters) {
+    private record MethodAccessKey<S>(Class<? extends S> source, String name, Class<?>[] parameters) implements MemberAccessKey<S> {
 
         public boolean constructor() {
             return name.equals("<init>");

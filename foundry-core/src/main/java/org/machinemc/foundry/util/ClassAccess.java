@@ -13,6 +13,7 @@ import java.lang.reflect.*;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 public final class ClassAccess {
 
@@ -105,19 +106,28 @@ public final class ClassAccess {
     }
 
     private static <S, T> FieldAccess<S, T> fieldAccess(FieldAccessKey<S> key) throws NoSuchFieldException {
-        FieldAccess<?, ?> fieldAccess = fieldCache.get(key);
-        if (fieldAccess == null) {
+        //noinspection unchecked
+        FieldAccess<S, T> fieldAccess = (FieldAccess<S, T>) fieldCache.get(key);
+        if (fieldAccess != null)
+            return fieldAccess;
+
+        synchronized (fieldCache) {
+            //noinspection unchecked
+            fieldAccess = (FieldAccess<S, T>) fieldCache.get(key);
+            if (fieldAccess != null)
+                return fieldAccess;
+
             Class<?> generated = defineHiddenIn(key.source(), generateFieldAccess(key));
             try {
-                fieldAccess = (FieldAccess<?, ?>) generated.getDeclaredConstructor().newInstance();
+                //noinspection unchecked
+                fieldAccess = (FieldAccess<S, T>) generated.getDeclaredConstructor().newInstance();
                 fieldCache.put(key, fieldAccess);
             } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
                 throw new RuntimeException(e); // Should not happen
             }
         }
-        //noinspection unchecked
-        return (FieldAccess<S, T>) fieldAccess;
 
+        return fieldAccess;
     }
 
     public static <S, T> MethodAccess<S, T> method(Class<S> source, String name, Class<?>... parameters) throws NoSuchMethodException {
@@ -125,18 +135,28 @@ public final class ClassAccess {
     }
 
     private static <S, T> MethodAccess<S, T> methodAccess(MethodAccessKey<S> key) throws NoSuchMethodException {
-        MethodAccess<?, ?> methodAccess = methodCache.get(key);
-        if (methodAccess == null) {
+        //noinspection unchecked
+        MethodAccess<S, T> methodAccess = (MethodAccess<S, T>) methodCache.get(key);
+        if (methodAccess != null)
+            return methodAccess;
+
+        synchronized (methodCache) {
+            //noinspection unchecked
+            methodAccess = (MethodAccess<S, T>) methodCache.get(key);
+            if (methodAccess != null)
+                return methodAccess;
+
             Class<?> generated = defineHiddenIn(key.source(), generateMethodAccess(key));
             try {
-                methodAccess = (MethodAccess<?, ?>) generated.getDeclaredConstructor().newInstance();
+                //noinspection unchecked
+                methodAccess = (MethodAccess<S, T>) generated.getDeclaredConstructor().newInstance();
                 methodCache.put(key, methodAccess);
             } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
                 throw new RuntimeException(e); // Should not happen
             }
         }
-        //noinspection unchecked
-        return (MethodAccess<S, T>) methodAccess;
+
+        return methodAccess;
     }
 
     private static Class<?> defineHiddenIn(Class<?> host, byte[] bytes) {

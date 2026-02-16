@@ -211,6 +211,21 @@ public class DeconstructedObjectTest {
         assertEquals(999, copy.value());
     }
 
+    @Test
+    void testMultipleConstructions() {
+        var deconstructor = DeconstructedObject.createDeconstructor(DirectFieldPojo.class);
+        var constructor = DeconstructedObject.createConstructor(DirectFieldPojo.class);
+
+        DirectFieldPojo original = new DirectFieldPojo("Direct Access", 42, 3.14);
+
+        for (int i = 0; i < 10; i++) {
+            DeconstructedObject deconstructed = deconstructor.apply(original);
+            DirectFieldPojo copy = constructor.apply(deconstructed);
+            assertNotSame(original, copy);
+            assertEquals(original, copy);
+        }
+    }
+
     private DeconstructedObject.Field findField(DeconstructedObject obj, String name) {
         for (DeconstructedObject.Field field : obj) {
             if (field.name().equals(name)) return field;

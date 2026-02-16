@@ -172,4 +172,32 @@ public final class ModelDataContainer {
         objects[objectsWrite++] = value;
     }
 
+    /**
+     * Resets all the reader indices.
+     */
+    public void resetReader() {
+        booleansRead = 0;
+        charsRead = 0;
+        bytesRead = 0;
+        shortsRead = 0;
+        intsRead = 0;
+        longsRead = 0;
+        floatsRead = 0;
+        doublesRead = 0;
+    }
+
+    /**
+     * Resets all the writer indices.
+     */
+    public void resetWriter() {
+        booleansWrite = 0;
+        charsWrite = 0;
+        bytesWrite = 0;
+        shortsWrite = 0;
+        intsWrite = 0;
+        longsWrite = 0;
+        floatsWrite = 0;
+        doublesWrite = 0;
+    }
+
 }

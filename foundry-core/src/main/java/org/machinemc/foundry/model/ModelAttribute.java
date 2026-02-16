@@ -1,7 +1,5 @@
 package org.machinemc.foundry.model;
 
-import org.jetbrains.annotations.Nullable;
-
 import java.lang.reflect.AnnotatedType;
 
 /**
@@ -13,8 +11,8 @@ import java.lang.reflect.AnnotatedType;
  * @param annotatedType annotated type of this attribute if present
  * @param access access for this attribute
  */
-public record ModelAttribute(Class<?> source, String name, Class<?> type,
-                             @Nullable AnnotatedType annotatedType, AttributeAccess access) {
+public record ModelAttribute(Class<?> source, String name, Class<?> type, AnnotatedType annotatedType,
+                             AttributeAccess access) {
 
     /**
      * @return whether this attribute is primitive

@@ -1,5 +1,6 @@
 package org.machinemc.foundry.model;
 
+import com.google.common.base.Preconditions;
 import org.jetbrains.annotations.ApiStatus;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
@@ -38,8 +39,21 @@ public abstract class ObjectFactory<T> {
      * @param <T> object type
      */
     public static <T> ObjectFactory<T> create(Class<T> type) {
+        return create(type, ClassModel.of(type));
+    }
+
+    /**
+     * Creates new object factory for objects of given type.
+     *
+     * @param type type of the object
+     * @param classModel class model of the type
+     * @return object factory for objects of given type
+     * @param <T> object type
+     */
+    public static <T> ObjectFactory<T> create(Class<T> type, ClassModel classModel) {
+        Preconditions.checkState(type.equals(classModel.getSource()), "Unexpected class model");
         //noinspection unchecked
-        return (ObjectFactory<T>) CACHE.computeIfAbsent(type, ObjectFactory::load);
+        return (ObjectFactory<T>) CACHE.computeIfAbsent(type, _ -> load(type, classModel));
     }
 
     private final ModelDataContainer.Factory holderFactory;
@@ -89,9 +103,7 @@ public abstract class ObjectFactory<T> {
      * @param type type to create the object factory for
      * @return object factory instance
      */
-    private static ObjectFactory<?> load(Class<?> type) {
-        ClassModel classModel = ClassModel.of(type);
-
+    private static ObjectFactory<?> load(Class<?> type, ClassModel classModel) {
         Type sourceT = Type.getType(type);
 
         ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);

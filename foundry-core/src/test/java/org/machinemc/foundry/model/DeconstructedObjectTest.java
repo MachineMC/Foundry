@@ -4,8 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.machinemc.foundry.Omit;
 
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -35,29 +34,32 @@ public class DeconstructedObjectTest {
     }
 
     @Test
-    void testDirectFields() {
+    void testDirectFields() throws Exception {
         var deconstructor = DeconstructedObject.createDeconstructor(DirectFieldPojo.class);
         var constructor = DeconstructedObject.createConstructor(DirectFieldPojo.class);
 
         DirectFieldPojo original = new DirectFieldPojo("Direct Access", 42, 3.14);
 
-        DeconstructedObject deconstructed = deconstructor.apply(original);
+        DeconstructedObject deconstructed = deconstructor.transform(original);
 
         assertEquals(3, deconstructed.size());
 
-        DeconstructedObject.ObjectField textField = (DeconstructedObject.ObjectField) findField(deconstructed, "text");
+        DeconstructedObject.ObjectField textField = (DeconstructedObject.ObjectField)
+                deconstructed.getField("text").orElseThrow();
         assertNotNull(textField);
         assertEquals("Direct Access", textField.value());
 
-        DeconstructedObject.IntField numField = (DeconstructedObject.IntField) findField(deconstructed, "number");
+        DeconstructedObject.IntField numField = (DeconstructedObject.IntField)
+                deconstructed.getField("number").orElseThrow();
         assertNotNull(numField);
         assertEquals(42, numField.value());
 
-        DeconstructedObject.DoubleField decField = (DeconstructedObject.DoubleField) findField(deconstructed, "decimal");
+        DeconstructedObject.DoubleField decField = (DeconstructedObject.DoubleField)
+                deconstructed.getField("decimal").orElseThrow();
         assertNotNull(decField);
         assertEquals(3.14, decField.value());
 
-        DirectFieldPojo copy = constructor.apply(deconstructed);
+        DirectFieldPojo copy = constructor.transform(deconstructed);
 
         assertNotSame(original, copy);
         assertEquals(original, copy);
@@ -106,21 +108,22 @@ public class DeconstructedObjectTest {
     }
 
     @Test
-    void testAccessors() {
+    void testAccessors() throws Exception {
         var deconstructor = DeconstructedObject.createDeconstructor(AccessorPojo.class);
         var constructor = DeconstructedObject.createConstructor(AccessorPojo.class);
 
         AccessorPojo original = new AccessorPojo("Encapsulated", true);
 
-        DeconstructedObject deconstructed = deconstructor.apply(original);
+        DeconstructedObject deconstructed = deconstructor.transform(original);
 
         assertEquals(2, original.getCalls, "Should have called getters during deconstruction");
 
-        DeconstructedObject.BoolField activeField = (DeconstructedObject.BoolField) findField(deconstructed, "active");
+        DeconstructedObject.BoolField activeField = (DeconstructedObject.BoolField)
+                deconstructed.getField("active").orElseThrow();
         assertNotNull(activeField);
         assertTrue(activeField.value());
 
-        AccessorPojo copy = constructor.apply(deconstructed);
+        AccessorPojo copy = constructor.transform(deconstructed);
 
         assertNotSame(original, copy);
         assertEquals(original, copy);
@@ -132,19 +135,19 @@ public class DeconstructedObjectTest {
     }
 
     @Test
-    void testRecord() {
+    void testRecord() throws Exception {
         var deconstructor = DeconstructedObject.createDeconstructor(SimpleRecord.class);
         var constructor = DeconstructedObject.createConstructor(SimpleRecord.class);
 
         SimpleRecord original = new SimpleRecord("RecordKey", 100, 0.5f);
 
-        DeconstructedObject deconstructed = deconstructor.apply(original);
+        DeconstructedObject deconstructed = deconstructor.transform(original);
 
-        assertInstanceOf(DeconstructedObject.IntField.class, findField(deconstructed, "value"));
-        assertInstanceOf(DeconstructedObject.FloatField.class, findField(deconstructed, "factor"));
-        assertInstanceOf(DeconstructedObject.ObjectField.class, findField(deconstructed, "key"));
+        assertInstanceOf(DeconstructedObject.IntField.class, deconstructed.getField("value").orElseThrow());
+        assertInstanceOf(DeconstructedObject.FloatField.class, deconstructed.getField("factor").orElseThrow());
+        assertInstanceOf(DeconstructedObject.ObjectField.class, deconstructed.getField("key").orElseThrow());
 
-        SimpleRecord copy = constructor.apply(deconstructed);
+        SimpleRecord copy = constructor.transform(deconstructed);
 
         assertEquals(original, copy);
     }
@@ -168,70 +171,60 @@ public class DeconstructedObjectTest {
     }
 
     @Test
-    void testFieldAccessAnnotation() {
+    void testFieldAccessAnnotation() throws Exception {
         var deconstructor = DeconstructedObject.createDeconstructor(BadlyNamedAccessors.class);
         var constructor = DeconstructedObject.createConstructor(BadlyNamedAccessors.class);
 
         BadlyNamedAccessors original = new BadlyNamedAccessors();
         original.foo = 99;
 
-        DeconstructedObject deconstructed = deconstructor.apply(original);
+        DeconstructedObject deconstructed = deconstructor.transform(original);
 
-        DeconstructedObject.IntField fooField = (DeconstructedObject.IntField) findField(deconstructed, "foo");
+        DeconstructedObject.IntField fooField = (DeconstructedObject.IntField)
+                deconstructed.getField("foo").orElseThrow();
         assertNotNull(fooField);
         assertEquals(99, fooField.value());
         assertTrue(original.calledGet, "Custom getter should be called");
 
-        BadlyNamedAccessors copy = constructor.apply(deconstructed);
+        BadlyNamedAccessors copy = constructor.transform(deconstructed);
 
         assertEquals(99, copy.foo);
         assertTrue(copy.calledSet, "Custom setter should be called");
     }
 
     @Test
-    void testManualModification() {
+    void testManualModification() throws Exception {
         var deconstructor = DeconstructedObject.createDeconstructor(SimpleRecord.class);
         var constructor = DeconstructedObject.createConstructor(SimpleRecord.class);
 
         SimpleRecord original = new SimpleRecord("Original", 1, 1.0f);
-        DeconstructedObject deconstructed = deconstructor.apply(original);
+        DeconstructedObject deconstructed = deconstructor.transform(original);
 
-        List<DeconstructedObject.Field> fields = deconstructed.asList();
-        List<DeconstructedObject.Field> modifiedFields = fields.stream()
-                .map(f -> f.name().equals("value")
-                        ? new DeconstructedObject.IntField("value", f.annotatedType(), 999)
-                        : f)
-                .toList();
+        Map<String, DeconstructedObject.Field> map = new LinkedHashMap<>(deconstructed.asMap());
+        DeconstructedObject.Field toReplace = map.get("value");
+        map.replace("value", new DeconstructedObject.IntField("value", toReplace.annotatedType(), 999));
 
-        DeconstructedObject modified = new DeconstructedObject(modifiedFields);
+        DeconstructedObject modified = new DeconstructedObject(map);
 
-        SimpleRecord copy = constructor.apply(modified);
+        SimpleRecord copy = constructor.transform(modified);
 
         assertEquals("Original", copy.key());
         assertEquals(999, copy.value());
     }
 
     @Test
-    void testMultipleConstructions() {
+    void testMultipleConstructions() throws Exception {
         var deconstructor = DeconstructedObject.createDeconstructor(DirectFieldPojo.class);
         var constructor = DeconstructedObject.createConstructor(DirectFieldPojo.class);
 
         DirectFieldPojo original = new DirectFieldPojo("Direct Access", 42, 3.14);
 
         for (int i = 0; i < 10; i++) {
-            DeconstructedObject deconstructed = deconstructor.apply(original);
-            DirectFieldPojo copy = constructor.apply(deconstructed);
+            DeconstructedObject deconstructed = deconstructor.transform(original);
+            DirectFieldPojo copy = constructor.transform(deconstructed);
             assertNotSame(original, copy);
             assertEquals(original, copy);
         }
-    }
-
-    private DeconstructedObject.Field findField(DeconstructedObject obj, String name) {
-        for (DeconstructedObject.Field field : obj) {
-            if (field.name().equals(name)) return field;
-        }
-        fail("Field '" + name + "' not found in DeconstructedObject");
-        return null;
     }
 
 }

@@ -2,12 +2,10 @@ package org.machinemc.foundry.model;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Unmodifiable;
+import org.machinemc.foundry.DataHandler;
 
 import java.lang.reflect.AnnotatedType;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.function.Function;
+import java.util.*;
 
 /**
  * Represents an object that has been deconstructed.
@@ -16,16 +14,16 @@ import java.util.function.Function;
 public final class DeconstructedObject implements Iterable<DeconstructedObject.Field> {
 
     /**
-     * Creates a function that deconstructs an instance of the specified type into a
+     * Creates a data handler that deconstructs an instance of the specified type into a
      * {@link DeconstructedObject}.
      * <p>
-     * The returned function is thread-safe and optimized for repeated use.
+     * The returned data handler is thread-safe and optimized for repeated use.
      *
      * @param type type the object to deconstruct
      * @param <T> type of the object
-     * @return a function that converts an instance of {@link T} into a deconstructed object
+     * @return a data handler that converts an instance of {@link T} into a deconstructed object
      */
-    public static <T> Function<T, DeconstructedObject> createDeconstructor(Class<T> type) {
+    public static <T> DataHandler<T, DeconstructedObject> createDeconstructor(Class<T> type) {
         ClassModel classModel = ClassModel.of(type);
         ObjectFactory<T> objectFactory = ObjectFactory.create(type, classModel);
         FieldsExtractor fieldsExtractor = FieldsExtractor.of(classModel);
@@ -37,42 +35,62 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
     }
 
     /**
-     * Creates a function that reconstructs an instance of the specified type from a
+     * Creates a data handler that reconstructs an instance of the specified type from a
      * {@link DeconstructedObject}.
      * <p>
-     * The returned function expects the input {@link DeconstructedObject} to contain fields
+     * The returned data handler expects the input {@link DeconstructedObject} to contain fields
      * compatible with the target class schema.
      * <p>
-     * The returned function is thread-safe and optimized for repeated use.
+     * The returned data handler is thread-safe and optimized for repeated use.
      *
      * @param type type the object to reconstruct
      * @param <T> type of the object
-     * @return a function that converts deconstructed object into an instance of {@link T}
+     * @return a data handler that converts deconstructed object into an instance of {@link T}
      */
-    public static <T> Function<DeconstructedObject, T> createConstructor(Class<T> type) {
+    public static <T> DataHandler<DeconstructedObject, T> createConstructor(Class<T> type) {
         ClassModel classModel = ClassModel.of(type);
         ObjectFactory<T> objectFactory = ObjectFactory.create(type, classModel);
         FieldsInjector fieldsInjector = FieldsInjector.of(classModel);
         return deconstructed -> {
             ModelDataContainer container = objectFactory.newContainer();
-            fieldsInjector.write(deconstructed.fields, container);
+            fieldsInjector.write(deconstructed.asList(), container);
             return objectFactory.read(container);
         };
     }
 
-    private final List<Field> fields;
+    private final @Unmodifiable Map<String, Field> fields;
 
-    DeconstructedObject(List<Field> fields) {
-        this.fields = fields;
+    DeconstructedObject(Map<String, Field> fields) {
+        this.fields = Collections.unmodifiableMap(fields);
+    }
+
+    /**
+     * Returns field with given name of empty if none exists.
+     *
+     * @param name name of the field
+     * @return field with given name
+     */
+    public Optional<Field> getField(String name) {
+        return Optional.ofNullable(fields.get(name));
+    }
+
+    /**
+     * Returns an unmodifiable map of the fields in this deconstructed object, mapped
+     * by their names.
+     *
+     * @return map of fields
+     */
+    public @Unmodifiable Map<String, Field> asMap() {
+        return fields;
     }
 
     /**
      * Returns an unmodifiable list of the fields in this deconstructed object.
      *
-     * @return the list of fields
+     * @return list of fields
      */
     public @Unmodifiable List<Field> asList() {
-        return Collections.unmodifiableList(fields);
+        return List.copyOf(fields.values());
     }
 
     /**
@@ -84,7 +102,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
 
     @Override
     public @NotNull Iterator<Field> iterator() {
-        return fields.iterator();
+        return fields.values().iterator();
     }
 
     /**
@@ -109,6 +127,9 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
 
     }
 
+    /**
+     * Primitive boolean field.
+     */
     public record BoolField(String name, AnnotatedType annotatedType, boolean value) implements Field {
         @Override
         public Class<?> type() {
@@ -116,6 +137,9 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
         }
     }
 
+    /**
+     * Primitive char field.
+     */
     public record CharField(String name, AnnotatedType annotatedType, char value) implements Field {
         @Override
         public Class<?> type() {
@@ -123,6 +147,9 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
         }
     }
 
+    /**
+     * Primitive byte field.
+     */
     public record ByteField(String name, AnnotatedType annotatedType, byte value) implements Field {
         @Override
         public Class<?> type() {
@@ -130,6 +157,9 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
         }
     }
 
+    /**
+     * Primitive short field.
+     */
     public record ShortField(String name, AnnotatedType annotatedType, short value) implements Field {
         @Override
         public Class<?> type() {
@@ -137,6 +167,9 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
         }
     }
 
+    /**
+     * Primitive int field.
+     */
     public record IntField(String name, AnnotatedType annotatedType, int value) implements Field {
         @Override
         public Class<?> type() {
@@ -144,6 +177,9 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
         }
     }
 
+    /**
+     * Primitive long field.
+     */
     public record LongField(String name, AnnotatedType annotatedType, long value) implements Field {
         @Override
         public Class<?> type() {
@@ -151,6 +187,9 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
         }
     }
 
+    /**
+     * Primitive float field.
+     */
     public record FloatField(String name, AnnotatedType annotatedType, float value) implements Field {
         @Override
         public Class<?> type() {
@@ -158,6 +197,9 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
         }
     }
 
+    /**
+     * Primitive double field.
+     */
     public record DoubleField(String name, AnnotatedType annotatedType, double value) implements Field {
         @Override
         public Class<?> type() {
@@ -165,6 +207,9 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
         }
     }
 
+    /**
+     * Primitive object field.
+     */
     public record ObjectField(String name, Class<?> type, AnnotatedType annotatedType, Object value) implements Field {
     }
 

@@ -1,10 +1,11 @@
 package org.machinemc.foundry.model;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.lang.reflect.AnnotatedType;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -69,14 +70,16 @@ record FieldsExtractor(Function<ModelDataContainer, DeconstructedObject.Field>[]
      * Reads fields from a container.
      *
      * @param dataContainer container to read
-     * @return list of fields
+     * @return map of fields
      */
-    List<DeconstructedObject.Field> read(ModelDataContainer dataContainer) {
-        List<DeconstructedObject.Field> fields = new ArrayList<>(fieldReaders.length);
-        for (var reader : fieldReaders) {
-            fields.add(reader.apply(dataContainer));
+    Map<String, DeconstructedObject.Field> read(ModelDataContainer dataContainer) {
+        //noinspection unchecked
+        Map.Entry<String, DeconstructedObject.Field>[] fields = new Map.Entry[fieldReaders.length];
+        for (int i = 0; i < fieldReaders.length; i++) {
+            var field = fieldReaders[i].apply(dataContainer);
+            fields[i] = Maps.immutableEntry(field.name(), field);
         }
-        return fields;
+        return ImmutableMap.ofEntries(fields);
     }
 
 }

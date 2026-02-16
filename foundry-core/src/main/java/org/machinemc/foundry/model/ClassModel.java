@@ -29,7 +29,6 @@ public class ClassModel {
 
     private final ModelAttribute[] attributes;
     private final ConstructionMethod constructionMethod;
-    private final Constructor<?> constructor;
 
     /**
      * Creates a class model for the specified type.
@@ -39,6 +38,10 @@ public class ClassModel {
      * @throws IllegalStateException if the class does not satisfy the requirements
      */
     public static ClassModel of(Class<?> type) {
+        if (type.isEnum() || type.isInterface() || type.isAnnotation() || Modifier.isAbstract(type.getModifiers()))
+            throw new UnsupportedOperationException("Can not automatically resolve class model for '"
+                    + type.getName() + "'");
+
         if (type.isRecord())
             return ofRecord(type);
 
@@ -58,7 +61,7 @@ public class ClassModel {
         Constructor<?> noArgs = noArgsConstructor(type);
         Preconditions.checkState(noArgs != null, "Class '" + type.getName() + "' is missing "
                 + "no arguments constructor");
-        return new ClassModel(attributes, ConstructionMethod.NO_ARGS_CONSTRUCTOR, noArgs);
+        return new ClassModel(attributes, ConstructionMethod.NO_ARGS_CONSTRUCTOR);
     }
 
     private static ClassModel ofRecord(Class<?> type) {
@@ -67,21 +70,12 @@ public class ClassModel {
                 .toArray(ModelAttribute[]::new);
         Constructor<?> constructor = allArgsConstructor(type, attributes);
         Preconditions.checkNotNull(constructor); // is always present on records
-        return new ClassModel(attributes, ConstructionMethod.ALL_ARGS_CONSTRUCTOR, constructor);
+        return new ClassModel(attributes, ConstructionMethod.ALL_ARGS_CONSTRUCTOR);
     }
 
-    protected ClassModel(ModelAttribute[] attributes, ConstructionMethod constructionMethod,
-                         Constructor<?> constructor) {
+    protected ClassModel(ModelAttribute[] attributes, ConstructionMethod constructionMethod) {
         this.attributes = attributes;
         this.constructionMethod = constructionMethod;
-        this.constructor = constructor;
-    }
-
-    /**
-     * @return the source class of this model
-     */
-    public Class<?> getSource() {
-        return constructor.getDeclaringClass();
     }
 
     /**
@@ -101,13 +95,6 @@ public class ClassModel {
      */
     public ConstructionMethod getConstructionMethod() {
         return constructionMethod;
-    }
-
-    /**
-     * @return constructor used by this model
-     */
-    public Constructor<?> getConstructor() {
-        return constructor;
     }
 
     /**

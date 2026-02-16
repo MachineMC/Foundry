@@ -1,6 +1,5 @@
 package org.machinemc.foundry.model;
 
-import com.google.common.base.Preconditions;
 import org.jetbrains.annotations.ApiStatus;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
@@ -51,7 +50,6 @@ public abstract class ObjectFactory<T> {
      * @param <T> object type
      */
     public static <T> ObjectFactory<T> create(Class<T> type, ClassModel classModel) {
-        Preconditions.checkState(type.equals(classModel.getSource()), "Unexpected class model");
         //noinspection unchecked
         return (ObjectFactory<T>) CACHE.computeIfAbsent(type, _ -> load(type, classModel));
     }

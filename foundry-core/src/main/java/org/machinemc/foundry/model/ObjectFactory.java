@@ -154,6 +154,7 @@ public abstract class ObjectFactory<T> {
                         ga.visitMethodInsn(opcode, attributeSourceT.getInternalName(), name,
                                 Type.getMethodDescriptor(Type.getType(returnType), paramsArr), isInterface);
                     }
+                    default -> throw new IllegalStateException(); // TODO custom getters
                 }
                 // write with the correct method
                 String methodName;
@@ -199,7 +200,7 @@ public abstract class ObjectFactory<T> {
 
             ga.visitCode();
 
-            if (classModel.getConstructionMethod() == ClassModel.ConstructionMethod.ALL_ARGS_CONSTRUCTOR) {
+            if (classModel.getConstructionMethod() instanceof ClassModel.AllArgsConstructor) {
                 ga.newInstance(sourceT);
                 ga.dup();
             }
@@ -240,7 +241,7 @@ public abstract class ObjectFactory<T> {
             }
 
             // call all args constructor
-            if (classModel.getConstructionMethod() == ClassModel.ConstructionMethod.ALL_ARGS_CONSTRUCTOR) {
+            if (classModel.getConstructionMethod() instanceof ClassModel.AllArgsConstructor) {
                 Type[] allArgsParams = Arrays.stream(classModel.getAttributes())
                         .map(ModelAttribute::type)
                         .map(Type::getType)
@@ -285,6 +286,7 @@ public abstract class ObjectFactory<T> {
                             }
                         }
                         case null -> throw new IllegalStateException("Expected setter"); // should not happen
+                        default -> throw new IllegalStateException(); // TODO custom setters
                     }
                 }
                 ga.loadLocal(instanceVar); // load the finished instance to return

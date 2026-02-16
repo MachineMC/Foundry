@@ -38,39 +38,7 @@ public class ClassModel {
      * @throws IllegalStateException if the class does not satisfy the requirements
      */
     public static ClassModel of(Class<?> type) {
-        if (type.isEnum() || type.isInterface() || type.isAnnotation() || Modifier.isAbstract(type.getModifiers()))
-            throw new UnsupportedOperationException("Can not automatically resolve class model for '"
-                    + type.getName() + "'");
-
-        if (type.isRecord())
-            return ofRecord(type);
-
-        ModelAttribute[] attributes = Arrays.stream(type.getDeclaredFields())
-                .filter(ClassModel::keepField)
-                .map(ClassModel::asAttribute)
-                .toArray(ModelAttribute[]::new);
-        ModelAttribute missingSetter = Arrays.stream(attributes)
-                .filter(attribute -> attribute.access().setter() == null)
-                .findFirst()
-                .orElse(null);
-        if (missingSetter != null)
-            throw new IllegalStateException("Attribute '" + missingSetter.name() + "' of class '" + type.getName()
-                    + "' is missing setter");
-        // We must use no arguments constructor, as fields in classes are in no guaranteed order. We can not
-        // determine the correct parameters order in all args constructor. This does not apply to records.
-        Constructor<?> noArgs = noArgsConstructor(type);
-        Preconditions.checkState(noArgs != null, "Class '" + type.getName() + "' is missing "
-                + "no arguments constructor");
-        return new ClassModel(attributes, ConstructionMethod.NO_ARGS_CONSTRUCTOR);
-    }
-
-    private static ClassModel ofRecord(Class<?> type) {
-        ModelAttribute[] attributes = Arrays.stream(type.getRecordComponents())
-                .map(ClassModel::asAttribute)
-                .toArray(ModelAttribute[]::new);
-        Constructor<?> constructor = allArgsConstructor(type, attributes);
-        Preconditions.checkNotNull(constructor); // is always present on records
-        return new ClassModel(attributes, ConstructionMethod.ALL_ARGS_CONSTRUCTOR);
+        return of0(type);
     }
 
     protected ClassModel(ModelAttribute[] attributes, ConstructionMethod constructionMethod) {
@@ -100,23 +68,62 @@ public class ClassModel {
     /**
      * Which construction method is used when creating new instance of the class.
      */
-    public enum ConstructionMethod {
+    public sealed interface ConstructionMethod {
+    }
 
-        /**
-         * No args constructor is called during the creation and the fields are
-         * populated via setters.
-         * <p>
-         * This method is used by regular classes.
-         */
-        NO_ARGS_CONSTRUCTOR,
+    /**
+     * No args constructor is called during the creation and the fields are
+     * populated via setters.
+     * <p>
+     * This method is used by regular classes.
+     */
+    public record NoArgsConstructor() implements ConstructionMethod {
+        public static final NoArgsConstructor INSTANCE = new NoArgsConstructor();
+    }
 
-        /**
-         * The object is created just by the all args constructor.
-         * <p>
-         * This method is used by records.
-         */
-        ALL_ARGS_CONSTRUCTOR
+    /**
+     * The object is created just by the all args constructor.
+     * <p>
+     * This method is used by records.
+     */
+    public record AllArgsConstructor() implements ConstructionMethod {
+        public static final AllArgsConstructor INSTANCE = new AllArgsConstructor();
+    }
 
+    private static ClassModel of0(Class<?> type) {
+        if (type.isEnum() || type.isInterface() || type.isAnnotation() || Modifier.isAbstract(type.getModifiers()))
+            throw new UnsupportedOperationException("Can not automatically resolve class model for '"
+                    + type.getName() + "'");
+
+        if (type.isRecord())
+            return ofRecord(type);
+
+        ModelAttribute[] attributes = Arrays.stream(type.getDeclaredFields())
+                .filter(ClassModel::keepField)
+                .map(ClassModel::asAttribute)
+                .toArray(ModelAttribute[]::new);
+        ModelAttribute missingSetter = Arrays.stream(attributes)
+                .filter(attribute -> attribute.access().setter() == null)
+                .findFirst()
+                .orElse(null);
+        if (missingSetter != null)
+            throw new IllegalStateException("Attribute '" + missingSetter.name() + "' of class '" + type.getName()
+                    + "' is missing setter");
+        // We must use no arguments constructor, as fields in classes are in no guaranteed order. We can not
+        // determine the correct parameters order in all args constructor. This does not apply to records.
+        Constructor<?> noArgs = noArgsConstructor(type);
+        Preconditions.checkState(noArgs != null, "Class '" + type.getName() + "' is missing "
+                + "no arguments constructor");
+        return new ClassModel(attributes, NoArgsConstructor.INSTANCE);
+    }
+
+    private static ClassModel ofRecord(Class<?> type) {
+        ModelAttribute[] attributes = Arrays.stream(type.getRecordComponents())
+                .map(ClassModel::asAttribute)
+                .toArray(ModelAttribute[]::new);
+        Constructor<?> constructor = allArgsConstructor(type, attributes);
+        Preconditions.checkNotNull(constructor); // is always present on records
+        return new ClassModel(attributes, AllArgsConstructor.INSTANCE);
     }
 
     private static boolean keepField(Field field) {

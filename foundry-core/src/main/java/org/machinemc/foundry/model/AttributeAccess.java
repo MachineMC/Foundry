@@ -70,4 +70,112 @@ public record AttributeAccess(Get getter, @Nullable Set setter) {
 
     }
 
+    /**
+     * Represents a custom, possibly more complex getter.
+     *
+     * @param <T> type of the object this getter invokes at
+     */
+    public sealed interface CustomGetter<T> extends Get {
+
+        @FunctionalInterface
+        non-sealed interface Bool<T> extends CustomGetter<T> {
+            boolean get(T obj);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Char<T> extends CustomGetter<T> {
+            char get(T obj);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Byte<T> extends CustomGetter<T> {
+            byte get(T obj);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Short<T> extends CustomGetter<T> {
+            short get(T obj);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Int<T> extends CustomGetter<T> {
+            int get(T obj);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Long<T> extends CustomGetter<T> {
+            long get(T obj);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Float<T> extends CustomGetter<T> {
+            float get(T obj);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Double<T> extends CustomGetter<T> {
+            double get(T obj);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Object<T, V> extends CustomGetter<T> {
+            V get(T obj);
+        }
+
+    }
+
+    /**
+     * Represents a custom, possibly more complex setter.
+     *
+     * @param <T> type of the object this setter invokes at
+     */
+    public sealed interface CustomSetter<T> extends Set {
+
+        @FunctionalInterface
+        non-sealed interface Bool<T> extends CustomSetter<T> {
+            void set(T obj, boolean value);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Char<T> extends CustomSetter<T> {
+            void set(T obj, char value);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Byte<T> extends CustomSetter<T> {
+            void set(T obj, byte value);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Short<T> extends CustomSetter<T> {
+            void set(T obj, short value);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Int<T> extends CustomSetter<T> {
+            void set(T obj, int value);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Long<T> extends CustomSetter<T> {
+            void set(T obj, long value);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Float<T> extends CustomSetter<T> {
+            void set(T obj, float value);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Double<T> extends CustomSetter<T> {
+            void set(T obj, double value);
+        }
+
+        @FunctionalInterface
+        non-sealed interface Object<T, V> extends CustomSetter<T> {
+            void set(T obj, V value);
+        }
+
+    }
+
 }

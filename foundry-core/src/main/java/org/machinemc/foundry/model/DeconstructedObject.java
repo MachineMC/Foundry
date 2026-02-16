@@ -2,7 +2,9 @@ package org.machinemc.foundry.model;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Unmodifiable;
+import org.machinemc.foundry.Codec;
 import org.machinemc.foundry.DataHandler;
+import org.machinemc.foundry.Pipeline;
 
 import java.lang.reflect.AnnotatedType;
 import java.util.*;
@@ -12,6 +14,25 @@ import java.util.*;
  * It effectively flattens an object into a sequence of {@link Field}s.
  */
 public final class DeconstructedObject implements Iterable<DeconstructedObject.Field> {
+
+    /**
+     * Creates a codec that transforms objects of type {@link T} into
+     * {@link DeconstructedObject} and back.
+     * <p>
+     * The returned codec is thread-safe and optimized for repeated use.
+     *
+     * @param type type the object to (de)construct
+     * @param <T> type of the object
+     * @return a codec that converts an instance of {@link T} into a deconstructed object and back
+     */
+    public static <T> Codec<T, DeconstructedObject> codec(Class<T> type) {
+        ClassModel classModel = ClassModel.of(type);
+        ObjectFactory<T> objectFactory = ObjectFactory.create(type, classModel);
+        return new Codec<>(
+                Pipeline.builder(createDeconstructor(classModel, objectFactory)).build(),
+                Pipeline.builder(createConstructor(classModel, objectFactory)).build()
+        );
+    }
 
     /**
      * Creates a data handler that deconstructs an instance of the specified type into a
@@ -25,13 +46,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      */
     public static <T> DataHandler<T, DeconstructedObject> createDeconstructor(Class<T> type) {
         ClassModel classModel = ClassModel.of(type);
-        ObjectFactory<T> objectFactory = ObjectFactory.create(type, classModel);
-        FieldsExtractor fieldsExtractor = FieldsExtractor.of(classModel);
-        return obj -> {
-            ModelDataContainer container = objectFactory.write(obj);
-            var fields = fieldsExtractor.read(container);
-            return new DeconstructedObject(fields);
-        };
+        return createDeconstructor(classModel, ObjectFactory.create(type, classModel));
     }
 
     /**
@@ -49,13 +64,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      */
     public static <T> DataHandler<DeconstructedObject, T> createConstructor(Class<T> type) {
         ClassModel classModel = ClassModel.of(type);
-        ObjectFactory<T> objectFactory = ObjectFactory.create(type, classModel);
-        FieldsInjector fieldsInjector = FieldsInjector.of(classModel);
-        return deconstructed -> {
-            ModelDataContainer container = objectFactory.newContainer();
-            fieldsInjector.write(deconstructed.asList(), container);
-            return objectFactory.read(container);
-        };
+        return createConstructor(classModel, ObjectFactory.create(type, classModel));
     }
 
     private final @Unmodifiable Map<String, Field> fields;
@@ -211,6 +220,26 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      * Primitive object field.
      */
     public record ObjectField(String name, Class<?> type, AnnotatedType annotatedType, Object value) implements Field {
+    }
+
+    private static <T> DataHandler<T, DeconstructedObject> createDeconstructor(ClassModel classModel,
+                                                                               ObjectFactory<T> objectFactory) {
+        FieldsExtractor fieldsExtractor = FieldsExtractor.of(classModel);
+        return obj -> {
+            ModelDataContainer container = objectFactory.write(obj);
+            var fields = fieldsExtractor.read(container);
+            return new DeconstructedObject(fields);
+        };
+    }
+
+    private static <T> DataHandler<DeconstructedObject, T> createConstructor(ClassModel classModel,
+                                                                             ObjectFactory<T> objectFactory) {
+        FieldsInjector fieldsInjector = FieldsInjector.of(classModel);
+        return deconstructed -> {
+            ModelDataContainer container = objectFactory.newContainer();
+            fieldsInjector.write(deconstructed.asList(), container);
+            return objectFactory.read(container);
+        };
     }
 
 }

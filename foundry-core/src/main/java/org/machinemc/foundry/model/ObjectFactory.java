@@ -12,8 +12,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static org.objectweb.asm.Opcodes.*;
 
@@ -27,8 +25,6 @@ import static org.objectweb.asm.Opcodes.*;
  */
 @ApiStatus.Internal
 public abstract class ObjectFactory<T> {
-
-    private static final Map<Class<?>, ObjectFactory<?>> CACHE = new ConcurrentHashMap<>();
 
     /**
      * Creates new object factory for objects of given type.
@@ -51,7 +47,7 @@ public abstract class ObjectFactory<T> {
      */
     public static <T> ObjectFactory<T> create(Class<T> type, ClassModel classModel) {
         //noinspection unchecked
-        return (ObjectFactory<T>) CACHE.computeIfAbsent(type, _ -> load(type, classModel));
+        return (ObjectFactory<T>) load(type, classModel);
     }
 
     private final ModelDataContainer.Factory holderFactory;

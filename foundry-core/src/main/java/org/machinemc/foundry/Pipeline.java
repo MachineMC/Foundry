@@ -4,6 +4,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
+import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.Immutable;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
@@ -28,7 +29,7 @@ public final class Pipeline<I, O> {
     private final @Unmodifiable List<DataHandler<?, ?>> handlers;
 
     private Pipeline(SequencedCollection<DataHandler<?, ?>> handlers) {
-        this.handlers = Collections.unmodifiableList(new LinkedList<>(handlers));
+        this.handlers = ImmutableList.copyOf(handlers);
     }
 
     /**

@@ -67,6 +67,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
         return createConstructor(classModel, ObjectFactory.create(type, classModel));
     }
 
+    // TODO this must also take source class as field names can overlap
     private final @Unmodifiable Map<String, Field> fields;
 
     DeconstructedObject(Map<String, Field> fields) {
@@ -112,6 +113,18 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
     @Override
     public @NotNull Iterator<Field> iterator() {
         return fields.values().iterator();
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (!(object instanceof DeconstructedObject other))
+            return false;
+        return fields.equals(other.fields);
+    }
+
+    @Override
+    public int hashCode() {
+        return fields.hashCode();
     }
 
     /**
@@ -217,7 +230,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
     }
 
     /**
-     * Primitive object field.
+     * Object field.
      */
     public record ObjectField(String name, Class<?> type, AnnotatedType annotatedType, Object value) implements Field {
     }

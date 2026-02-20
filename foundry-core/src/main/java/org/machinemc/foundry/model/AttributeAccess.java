@@ -1,10 +1,10 @@
 package org.machinemc.foundry.model;
 
+import com.google.common.collect.ImmutableList;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 
 import java.lang.reflect.Field;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -55,7 +55,7 @@ public record AttributeAccess(Get getter, @Nullable Set setter) {
     public record Method(Class<?> returnType, String name, @Unmodifiable List<Class<?>> params) implements Get, Set {
 
         public Method {
-            params = Collections.unmodifiableList(params);
+            params = ImmutableList.copyOf(params);
         }
 
         /**

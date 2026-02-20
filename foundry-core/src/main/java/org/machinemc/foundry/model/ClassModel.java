@@ -1,7 +1,5 @@
 package org.machinemc.foundry.model;
 
-import com.google.common.collect.ImmutableList;
-import org.jetbrains.annotations.Unmodifiable;
 import org.machinemc.foundry.Omit;
 
 import java.util.*;
@@ -106,17 +104,14 @@ public class ClassModel {
     }
 
     /**
-     * Constructor called with values of given attributes in order.
+     * Constructor called with first {@code count} attributes.
+     * <p>
+     * The class must have a constructor accepting those first {@code count} parameters
+     * in order of their definition in the class model.
      *
-     * @param attributes attributes representing parameters of the constructor
+     * @param count number of attributes to read and construct the instance from
      */
-    public record AttributeAcceptingConstructor(@Unmodifiable List<AttributeAccess> attributes)
-            implements ConstructionMethod {
-
-        public AttributeAcceptingConstructor {
-            attributes = ImmutableList.copyOf(attributes);
-        }
-
+    public record AttributeAcceptingConstructor(int count) implements ConstructionMethod {
     }
 
     /**

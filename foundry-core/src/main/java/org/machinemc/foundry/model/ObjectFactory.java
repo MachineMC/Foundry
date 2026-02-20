@@ -9,9 +9,7 @@ import org.objectweb.asm.commons.GeneratorAdapter;
 import java.lang.constant.ConstantDescs;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.InvocationTargetException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import static org.objectweb.asm.Opcodes.*;
 
@@ -82,6 +80,32 @@ public abstract class ObjectFactory<T> {
      * @return new instance with data read from the container
      */
     public abstract T read(ModelDataContainer container);
+
+    /**
+     * Part of object factory that reads or writes some attributes.
+     * <p>
+     * This class does not handle the instance or data container creation
+     * but only individual read or writes.
+     */
+    public static abstract class ObjectFactoryPart<T> {
+
+        /**
+         * Writes some of {@code instance} data to the provided container.
+         *
+         * @param instance instance to read the data from
+         * @param container container to write the data to
+         */
+        public abstract void write(T instance, ModelDataContainer container);
+
+        /**
+         * Reads some data of the provided container and writes them to the {@code instance}.
+         *
+         * @param container container to read the data from
+         * @param instance instance to write the data to
+         */
+        public abstract void read(ModelDataContainer container, T instance);
+
+    }
 
     private static final String WRITE_METHOD_NAME = "write";
     private static final String READ_METHOD_NAME = "read";

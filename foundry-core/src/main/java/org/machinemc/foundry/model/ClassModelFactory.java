@@ -12,7 +12,7 @@ import java.util.*;
  *
  * @see ClassModel
  */
-class ClassModelFactory {
+final class ClassModelFactory {
 
     private ClassModelFactory() {
         throw new UnsupportedOperationException();

@@ -25,6 +25,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      * @param <T> type of the object
      * @return a codec that converts an instance of {@link T} into a deconstructed object and back
      */
+    // TODO overload method that takes class model
     public static <T> Codec<T, DeconstructedObject> codec(Class<T> type) {
         ClassModel classModel = ClassModel.of(type);
         ObjectFactory<T> objectFactory = ObjectFactory.create(type, classModel);
@@ -44,6 +45,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      * @param <T> type of the object
      * @return a data handler that converts an instance of {@link T} into a deconstructed object
      */
+    // TODO overload method that takes class model
     public static <T> DataHandler<T, DeconstructedObject> createDeconstructor(Class<T> type) {
         ClassModel classModel = ClassModel.of(type);
         return createDeconstructor(classModel, ObjectFactory.create(type, classModel));
@@ -62,36 +64,16 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      * @param <T> type of the object
      * @return a data handler that converts deconstructed object into an instance of {@link T}
      */
+    // TODO overload method that takes class model
     public static <T> DataHandler<DeconstructedObject, T> createConstructor(Class<T> type) {
         ClassModel classModel = ClassModel.of(type);
         return createConstructor(classModel, ObjectFactory.create(type, classModel));
     }
 
-    // TODO this must also take source class as field names can overlap
-    private final @Unmodifiable Map<String, Field> fields;
+    private final @Unmodifiable List<Field> fields;
 
-    DeconstructedObject(Map<String, Field> fields) {
-        this.fields = Collections.unmodifiableMap(fields);
-    }
-
-    /**
-     * Returns field with given name of empty if none exists.
-     *
-     * @param name name of the field
-     * @return field with given name
-     */
-    public Optional<Field> getField(String name) {
-        return Optional.ofNullable(fields.get(name));
-    }
-
-    /**
-     * Returns an unmodifiable map of the fields in this deconstructed object, mapped
-     * by their names.
-     *
-     * @return map of fields
-     */
-    public @Unmodifiable Map<String, Field> asMap() {
-        return fields;
+    DeconstructedObject(List<Field> fields) {
+        this.fields = Collections.unmodifiableList(fields);
     }
 
     /**
@@ -100,7 +82,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      * @return list of fields
      */
     public @Unmodifiable List<Field> asList() {
-        return List.copyOf(fields.values());
+        return fields;
     }
 
     /**
@@ -111,8 +93,8 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
     }
 
     @Override
-    public @NotNull Iterator<Field> iterator() {
-        return fields.values().iterator();
+    public @NotNull ListIterator<Field> iterator() {
+        return fields.listIterator();
     }
 
     @Override
@@ -146,6 +128,13 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
          * @return annotated type of the field
          */
         AnnotatedType annotatedType();
+
+        /**
+         * @return whether this field is primitive
+         */
+        default boolean primitive() {
+            return type().isPrimitive();
+        }
 
     }
 
@@ -235,6 +224,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
     public record ObjectField(String name, Class<?> type, AnnotatedType annotatedType, Object value) implements Field {
     }
 
+    // TODO this should possibly be in a different class
     private static <T> DataHandler<T, DeconstructedObject> createDeconstructor(ClassModel classModel,
                                                                                ObjectFactory<T> objectFactory) {
         FieldsExtractor fieldsExtractor = FieldsExtractor.of(classModel);
@@ -245,6 +235,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
         };
     }
 
+    // TODO this should possibly be in a different class
     private static <T> DataHandler<DeconstructedObject, T> createConstructor(ClassModel classModel,
                                                                              ObjectFactory<T> objectFactory) {
         FieldsInjector fieldsInjector = FieldsInjector.of(classModel);

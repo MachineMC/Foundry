@@ -45,17 +45,17 @@ public class DeconstructedObjectTest {
         assertEquals(3, deconstructed.size());
 
         DeconstructedObject.ObjectField textField = (DeconstructedObject.ObjectField)
-                deconstructed.getField("text").orElseThrow();
+                getField(deconstructed, "text").orElseThrow();
         assertNotNull(textField);
         assertEquals("Direct Access", textField.value());
 
         DeconstructedObject.IntField numField = (DeconstructedObject.IntField)
-                deconstructed.getField("number").orElseThrow();
+                getField(deconstructed, "number").orElseThrow();
         assertNotNull(numField);
         assertEquals(42, numField.value());
 
         DeconstructedObject.DoubleField decField = (DeconstructedObject.DoubleField)
-                deconstructed.getField("decimal").orElseThrow();
+                getField(deconstructed, "decimal").orElseThrow();
         assertNotNull(decField);
         assertEquals(3.14, decField.value());
 
@@ -119,7 +119,7 @@ public class DeconstructedObjectTest {
         assertEquals(2, original.getCalls, "Should have called getters during deconstruction");
 
         DeconstructedObject.BoolField activeField = (DeconstructedObject.BoolField)
-                deconstructed.getField("active").orElseThrow();
+                getField(deconstructed, "active").orElseThrow();
         assertNotNull(activeField);
         assertTrue(activeField.value());
 
@@ -143,9 +143,9 @@ public class DeconstructedObjectTest {
 
         DeconstructedObject deconstructed = deconstructor.transform(original);
 
-        assertInstanceOf(DeconstructedObject.IntField.class, deconstructed.getField("value").orElseThrow());
-        assertInstanceOf(DeconstructedObject.FloatField.class, deconstructed.getField("factor").orElseThrow());
-        assertInstanceOf(DeconstructedObject.ObjectField.class, deconstructed.getField("key").orElseThrow());
+        assertInstanceOf(DeconstructedObject.IntField.class, getField(deconstructed, "value").orElseThrow());
+        assertInstanceOf(DeconstructedObject.FloatField.class, getField(deconstructed, "factor").orElseThrow());
+        assertInstanceOf(DeconstructedObject.ObjectField.class, getField(deconstructed, "key").orElseThrow());
 
         SimpleRecord copy = constructor.transform(deconstructed);
 
@@ -181,7 +181,7 @@ public class DeconstructedObjectTest {
         DeconstructedObject deconstructed = deconstructor.transform(original);
 
         DeconstructedObject.IntField fooField = (DeconstructedObject.IntField)
-                deconstructed.getField("foo").orElseThrow();
+                getField(deconstructed, "foo").orElseThrow();
         assertNotNull(fooField);
         assertEquals(99, fooField.value());
         assertTrue(original.calledGet, "Custom getter should be called");
@@ -200,11 +200,14 @@ public class DeconstructedObjectTest {
         SimpleRecord original = new SimpleRecord("Original", 1, 1.0f);
         DeconstructedObject deconstructed = deconstructor.transform(original);
 
-        Map<String, DeconstructedObject.Field> map = new LinkedHashMap<>(deconstructed.asMap());
-        DeconstructedObject.Field toReplace = map.get("value");
-        map.replace("value", new DeconstructedObject.IntField("value", toReplace.annotatedType(), 999));
+        var modifiedFields = deconstructed.asList().stream().map(f -> {
+            if (f.name().equals("value"))
+                return new DeconstructedObject.IntField("value", f.annotatedType(), 999);
+            else
+                return f;
+        }).toList();
 
-        DeconstructedObject modified = new DeconstructedObject(map);
+        DeconstructedObject modified = new DeconstructedObject(modifiedFields);
 
         SimpleRecord copy = constructor.transform(modified);
 
@@ -225,6 +228,14 @@ public class DeconstructedObjectTest {
             assertNotSame(original, copy);
             assertEquals(original, copy);
         }
+    }
+
+    Optional<DeconstructedObject.Field> getField(DeconstructedObject obj, String name) {
+        for (var field : obj) {
+            if (field.name().equals(name))
+                return Optional.of(field);
+        }
+        return Optional.empty();
     }
 
 }

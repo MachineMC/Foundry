@@ -7,18 +7,6 @@ import java.util.*;
 /**
  * Represents a schema of a Java class, defining how to construct instances
  * and access its attributes.
- * <p>
- * This model enforces two strategies based on the class type:
- * <ul>
- * <li><b>Records:</b> Constructed using the canonical all args constructor. Attributes
- * are accessed with record component accessors.</li>
- *
- * <li><b>Regular Classes:</b> Constructed using the no args constructor and field setters.
- * All fields that are not transient, static, or annotated with {@link Omit} must be mutable.
- * Foundry automatically finds getter and setter methods for individual fields if they exist
- * and follow regular naming format. If they do not, the methods to use can be
- * specified with {@link FieldAccess}.
- * </ul>
  */
 public class ClassModel {
 
@@ -32,8 +20,19 @@ public class ClassModel {
      * <p>
      * Getters and setters (both non-chaining and chaining) respecting the JavaBeans naming or
      * fluent record naming schemes are prioritized over the direct field access.
+     * If they do not follow the common naming scheme, the correct methods to use can be
+     * specified with {@link FieldAccess}.
      * <p>
      * Class member are allowed to have {@code private} access modifier.
+     * <p>
+     * This model enforces two strategies based on the class type:
+     * <ul>
+     * <li><b>Records:</b> Constructed using the canonical all args constructor. Attributes
+     * are accessed with record component accessors.</li>
+     *
+     * <li><b>Regular Classes:</b> Constructed using the no args constructor and field setters.
+     * All fields that are not {@code transient}, {@code static}, or annotated with {@link Omit} must be mutable.
+     * </ul>
      *
      * @param type type to generate the model for
      * @return model for given type
@@ -95,23 +94,12 @@ public class ClassModel {
     }
 
     /**
-     * The object is created just by the all args constructor.
+     * The object is created by the all args constructor.
      * <p>
      * This method is used by records.
      */
-    public record AllArgsConstructor() implements ConstructionMethod {
-        public static final AllArgsConstructor INSTANCE = new AllArgsConstructor();
-    }
-
-    /**
-     * Constructor called with first {@code count} attributes.
-     * <p>
-     * The class must have a constructor accepting those first {@code count} parameters
-     * in order of their definition in the class model.
-     *
-     * @param count number of attributes to read and construct the instance from
-     */
-    public record AttributeAcceptingConstructor(int count) implements ConstructionMethod {
+    public record RecordConstructor() implements ConstructionMethod {
+        public static final RecordConstructor INSTANCE = new RecordConstructor();
     }
 
     /**

@@ -25,44 +25,45 @@ import static org.objectweb.asm.Opcodes.*;
  */
 final class ClassData {
 
-    final @Nullable ClassModel.CustomConstructor<?> constructor;
-    final List<AttributeAccess> getters;
-    final List<AttributeAccess> setters;
-    final Map<Class<?>, ObjectFactory.ObjectFactoryPart<?>> parentAccessors;
-    final boolean[] visited;
+    /**
+     * @return new builder for class data
+     */
+    static Builder builder() {
+        return new Builder();
+    }
+
+    private final @Nullable ClassModel.CustomConstructor<?> constructor;
+    private final List<ModelAttribute> getters;
+    private final List<ModelAttribute> setters;
+    private final Map<Class<?>, ObjectFactory.ObjectFactoryPart<?>> parentAccessors;
+    private final int size;
 
     private ClassData(@Nullable ClassModel.CustomConstructor<?> constructor,
-                      List<AttributeAccess> getters, List<AttributeAccess> setters,
+                      List<ModelAttribute> getters, List<ModelAttribute> setters,
                       Map<Class<?>, ObjectFactory.ObjectFactoryPart<?>> parentAccessors) {
         this.constructor = constructor;
         this.getters = getters;
         this.setters = setters;
         this.parentAccessors = parentAccessors;
-        int size = getters.size() + setters.size() + parentAccessors.size() + (constructor != null ? 1 : 0);
-        this.visited = new boolean[size];
-    }
-
-    private int visit(int idx) {
-        visited[idx] = true;
-        return idx;
+        size = getters.size() + setters.size() + parentAccessors.size() + (constructor != null ? 1 : 0);
     }
 
     /**
-     * @param access attribute access
+     * @param attribute attribute
      * @return index of getter for given attribute
      */
-    int getterIdx(AttributeAccess access) {
-        Preconditions.checkState(getters.contains(access), "Missing getter");
-        return visit(getters.indexOf(access));
+    int getterIdx(ModelAttribute attribute) {
+        Preconditions.checkState(getters.contains(attribute), "Missing getter");
+        return getters.indexOf(attribute);
     }
 
     /**
-     * @param access attribute access
+     * @param attribute attribute
      * @return index of setter for given attribute
      */
-    int setterIdx(AttributeAccess access) {
-        Preconditions.checkState(setters.contains(access), "Missing setter");
-        return visit(getters.size() + setters.indexOf(access));
+    int setterIdx(ModelAttribute attribute) {
+        Preconditions.checkState(setters.contains(attribute), "Missing setter");
+        return getters.size() + setters.indexOf(attribute);
     }
 
     /**
@@ -76,7 +77,7 @@ final class ClassData {
             if (parent.equals(key)) break;
             i++;
         }
-        return visit(getters.size() + setters.size() + i);
+        return getters.size() + setters.size() + i;
     }
 
     /**
@@ -84,21 +85,21 @@ final class ClassData {
      */
     int constructorIdx() {
         Preconditions.checkState(constructor != null, "Missing constructor");
-        return visit(getters.size() + setters.size() + parentAccessors.size());
+        return getters.size() + setters.size() + parentAccessors.size();
     }
 
     /**
-     * Visits the fields that have been requested by this instance of class data on given visitor.
+     * Visits the fields of class data on given visitor.
      *
      * @param visitor visitor
      */
-    void visitRequestedFields(ClassVisitor visitor) {
+    void visitFields(ClassVisitor visitor) {
         int i = 0;
         for (var getter : getters)
-            visitField(visitor, i++, getExactType(getter.getter()));
+            visitField(visitor, i++, getExactType(getter.access().getter()));
         for (var setter : setters) {
-            Preconditions.checkNotNull(setter.setter(), "Expected setter but got null");
-            visitField(visitor, i++, getExactType(setter.setter()));
+            Preconditions.checkNotNull(setter.access().setter(), "Expected setter but got null");
+            visitField(visitor, i++, getExactType(setter.access().setter()));
         }
         for (var _ : parentAccessors.values())
             visitField(visitor, i++, ObjectFactory.ObjectFactoryPart.class);
@@ -107,8 +108,6 @@ final class ClassData {
     }
 
     private void visitField(ClassVisitor visitor, int idx, Class<?> fieldType) {
-        if (!visited[idx])
-            return;
         visitor.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, fieldNameOf(idx),
                 Type.getDescriptor(fieldType), null, null);
     }
@@ -143,10 +142,10 @@ final class ClassData {
     void visitStaticBlock(Type owner, MethodVisitor mv) {
         int i = 0;
         for (var getter : getters)
-            putField(owner, mv, i++, getExactType(getter.getter()));
+            putField(owner, mv, i++, getExactType(getter.access().getter()));
         for (var setter : setters) {
-            Preconditions.checkNotNull(setter.setter(), "Expected setter but got null");
-            putField(owner, mv, i++, getExactType(setter.setter()));
+            Preconditions.checkNotNull(setter.access().setter(), "Expected setter but got null");
+            putField(owner, mv, i++, getExactType(setter.access().setter()));
         }
         for (var _ : parentAccessors.values())
             putField(owner, mv, i++, ObjectFactory.ObjectFactoryPart.class);
@@ -155,8 +154,6 @@ final class ClassData {
     }
 
     private void putField(Type owner, MethodVisitor mv, int idx, Class<?> type) {
-        if (!visited[idx])
-            return;
         mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(MethodHandles.class), "lookup",
                 Type.getMethodDescriptor(Type.getType(MethodHandles.Lookup.class)), false);
         mv.visitLdcInsn(ConstantDescs.DEFAULT_NAME);
@@ -180,6 +177,40 @@ final class ClassData {
     }
 
     /**
+     * Loads the data with given index on the top of the stack.
+     *
+     * @param owner current class visited by the method visitor
+     * @param mv method visitor
+     * @param idx index
+     */
+    void loadOnStack(Type owner, MethodVisitor mv, int idx) {
+        Class<?> type;
+        // getters
+        if (idx < getters.size()) {
+            type = getExactType(getters.get(idx).access().getter());
+        }
+        // setters
+        else if (idx < getters.size() + setters.size()) {
+            int setterIdx = idx - getters.size();
+            var setter = setters.get(setterIdx).access().setter();
+            Preconditions.checkNotNull(setter, "Expected setter");
+            type = getExactType(setter);
+        }
+        // parent accessors
+        else if (idx < getters.size() + setters.size() + parentAccessors.size()) {
+            type = ObjectFactory.ObjectFactoryPart.class;
+        }
+        // constructor
+        else if (constructor != null && idx == constructorIdx()) {
+            type = ClassModel.CustomConstructor.class;
+        }
+        else {
+            throw new ArrayIndexOutOfBoundsException("Index " + idx + " is out of bounds for size " + size);
+        }
+        mv.visitFieldInsn(GETSTATIC, owner.getInternalName(), fieldNameOf(idx), Type.getDescriptor(type));
+    }
+
+    /**
      * Returns the class data as a list of objects that should be used in the class definition.
      *
      * @return class data as list
@@ -187,12 +218,12 @@ final class ClassData {
      * MethodHandles.Lookup.ClassOption...)
      */
     List<Object> asList() {
-        Object[] data = new Object[visited.length];
+        Object[] data = new Object[size];
         int offset = 0;
         for (var getter : getters)
-            data[offset++] = getter.getter();
+            data[offset++] = getter.access().getter();
         for (var setter : setters)
-            data[offset++] = setter.setter();
+            data[offset++] = setter.access().setter();
         for (var accessor : parentAccessors.values())
             data[offset++] = accessor;
         if (constructor != null)
@@ -233,12 +264,15 @@ final class ClassData {
     /**
      * Builder for class data instances.
      */
-    static final class ClassDataBuilder {
+    static final class Builder {
 
-        @Nullable ClassModel.CustomConstructor<?> constructor = null;
-        final List<AttributeAccess> getters = new ArrayList<>();
-        final List<AttributeAccess> setters = new ArrayList<>();
-        final Map<Class<?>, ObjectFactory.ObjectFactoryPart<?>> parentAccessors = new LinkedHashMap<>();
+        private Builder() {
+        }
+
+        private @Nullable ClassModel.CustomConstructor<?> constructor = null;
+        private final List<ModelAttribute> getters = new ArrayList<>();
+        private final List<ModelAttribute> setters = new ArrayList<>();
+        private final Map<Class<?>, ObjectFactory.ObjectFactoryPart<?>> parentAccessors = new LinkedHashMap<>();
 
         /**
          * Reserves new index for a custom constructor.
@@ -254,25 +288,25 @@ final class ClassData {
         /**
          * Reserves new index for a custom getter.
          *
-         * @param access access for the attribute
+         * @param attribute attribute to reserve the getter for
          */
-        void reserveGetter(AttributeAccess access) {
-            if (getters.contains(access)) return;
-            Preconditions.checkState(access.getter() instanceof AttributeAccess.CustomGetter<?>, "You can "
-                    + "reserve getter place only for a custom getters");
-            getters.add(access);
+        void reserveGetter(ModelAttribute attribute) {
+            if (getters.contains(attribute)) return;
+            Preconditions.checkState(attribute.access().getter() instanceof AttributeAccess.CustomGetter<?>,
+                    "You can reserve getter place only for a custom getters");
+            getters.add(attribute);
         }
 
         /**
          * Reserves new index for a custom setter.
          *
-         * @param access access for the attribute
+         * @param attribute attribute to reserve the setter for
          */
-        void reserveSetter(AttributeAccess access) {
-            if (setters.contains(access)) return;
-            Preconditions.checkState(access.setter() instanceof AttributeAccess.CustomSetter<?>, "You can "
-                    + "reserve setter place only for a custom setter");
-            setters.add(access);
+        void reserveSetter(ModelAttribute attribute) {
+            if (setters.contains(attribute)) return;
+            Preconditions.checkState(attribute.access().setter() instanceof AttributeAccess.CustomSetter<?>,
+                    "You can reserve setter place only for a custom setter");
+            setters.add(attribute);
         }
 
         /**

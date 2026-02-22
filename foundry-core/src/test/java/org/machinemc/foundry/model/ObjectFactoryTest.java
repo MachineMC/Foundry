@@ -166,4 +166,69 @@ public class ObjectFactoryTest {
         assertTrue(copy.calledSet);
     }
 
+    public static class BaseEntity {
+        private int baseId;
+        private BaseEntity() {}
+        public BaseEntity(int baseId) { this.baseId = baseId; }
+        public int fetchBaseId() { return baseId; } // non bean name to force direct field access
+    }
+
+    public static class SubEntity1 extends BaseEntity {
+        private String sub1Name;
+        private SubEntity1() {}
+        public SubEntity1(int baseId, String sub1Name) {
+            super(baseId);
+            this.sub1Name = sub1Name;
+        }
+        public String fetchSub1Name() { return sub1Name; }
+    }
+
+    public static class SubEntity2 extends SubEntity1 {
+        private boolean sub2Flag;
+        private SubEntity2() {}
+        public SubEntity2(int baseId, String sub1Name, boolean sub2Flag) {
+            super(baseId, sub1Name);
+            this.sub2Flag = sub2Flag;
+        }
+        public boolean fetchSub2Flag() { return sub2Flag; }
+    }
+
+    public static class SubEntity3 extends SubEntity2 {
+        private double sub3Value;
+        private SubEntity3() {}
+        public SubEntity3(int baseId, String sub1Name, boolean sub2Flag, double sub3Value) {
+            super(baseId, sub1Name, sub2Flag);
+            this.sub3Value = sub3Value;
+        }
+        public double fetchSub3Value() { return sub3Value; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof SubEntity3 that)) return false;
+            return fetchBaseId() == that.fetchBaseId() &&
+                    fetchSub2Flag() == that.fetchSub2Flag() &&
+                    Double.compare(that.fetchSub3Value(), fetchSub3Value()) == 0 &&
+                    Objects.equals(fetchSub1Name(), that.fetchSub1Name());
+        }
+    }
+
+    @Test
+    void testDeepInheritanceWithPrivateFields() {
+        ObjectFactory<SubEntity3> model = ObjectFactory.create(SubEntity3.class);
+
+        SubEntity3 original = new SubEntity3(1024, "Deep Hierarchy", true, 99.99);
+
+        ModelDataContainer container = model.write(original);
+        SubEntity3 copy = model.read(container);
+
+        assertNotSame(original, copy);
+        assertEquals(original, copy);
+
+        assertEquals(1024, copy.fetchBaseId());
+        assertEquals("Deep Hierarchy", copy.fetchSub1Name());
+        assertTrue(copy.fetchSub2Flag());
+        assertEquals(99.99, copy.fetchSub3Value());
+    }
+
 }

@@ -64,7 +64,7 @@ final class ClassModelFactory {
                 .toArray(ModelAttribute[]::new);
         Constructor<?> constructor = allArgsConstructor(type, attributes);
         Preconditions.checkNotNull(constructor); // is always present on records
-        return new ClassModel(attributes, ClassModel.AllArgsConstructor.INSTANCE);
+        return new ClassModel(attributes, ClassModel.RecordConstructor.INSTANCE);
     }
 
     private static SequencedSet<Field> getAllFields(Class<?> type) {

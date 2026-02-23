@@ -280,6 +280,15 @@ public abstract class ObjectFactory<T> {
         mv.visitEnd();
     }
 
+    /**
+     * Visits the read method in the object factory in record class.
+     * <p>
+     * The record canonical constructor gets called to set all the record components.
+     *
+     * @param cv class visitor
+     * @param sourceT the type of the class this object factory is for
+     * @param attributes attributes
+     */
     private static void visitReadForRecord(ClassVisitor cv, Type sourceT, List<ModelAttribute> attributes) {
         var readDescriptor = Type.getMethodDescriptor(Type.getType(Object.class),
                 Type.getType(ModelDataContainer.class));

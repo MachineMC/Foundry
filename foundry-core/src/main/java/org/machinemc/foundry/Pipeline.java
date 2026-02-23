@@ -33,6 +33,54 @@ public final class Pipeline<I, O> {
     }
 
     /**
+     * Creates pipeline from provided data handlers.
+     *
+     * @return pipeline from provided data handlers
+     */
+    public static <A, B> Pipeline<A, B> of(DataHandler<A, B> dh1) {
+        return new Pipeline<>(List.of(dh1));
+    }
+
+    /**
+     * Creates pipeline from provided data handlers.
+     *
+     * @return pipeline from provided data handlers
+     */
+    public static <A, B, C> Pipeline<A, C> of(DataHandler<A, B> dh1, DataHandler<B, C> dh2) {
+        return new Pipeline<>(List.of(dh1, dh2));
+    }
+
+    /**
+     * Creates pipeline from provided data handlers.
+     *
+     * @return pipeline from provided data handlers
+     */
+    public static <A, B, C, D> Pipeline<A, D> of(DataHandler<A, B> dh1, DataHandler<B, C> dh2, DataHandler<C, D> dh3) {
+        return new Pipeline<>(List.of(dh1, dh2, dh3));
+    }
+
+    /**
+     * Creates pipeline from provided data handlers.
+     *
+     * @return pipeline from provided data handlers
+     */
+    public static <A, B, C, D, E> Pipeline<A, E> of(DataHandler<A, B> dh1, DataHandler<B, C> dh2, DataHandler<C, D> dh3,
+                                                    DataHandler<D, E> dh4) {
+        return new Pipeline<>(List.of(dh1, dh2, dh3, dh4));
+    }
+
+    /**
+     * Creates pipeline from provided data handlers.
+     *
+     * @return pipeline from provided data handlers
+     */
+    public static <A, B, C, D, E, F> Pipeline<A, F> of(DataHandler<A, B> dh1, DataHandler<B, C> dh2,
+                                                       DataHandler<C, D> dh3, DataHandler<D, E> dh4,
+                                                       DataHandler<E, F> dh5) {
+        return new Pipeline<>(List.of(dh1, dh2, dh3, dh4, dh5));
+    }
+
+    /**
      * Creates a new builder to construct a pipeline.
      *
      * @param <F> the input type of the first handler (and the pipeline)

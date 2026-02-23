@@ -1,5 +1,6 @@
 package org.machinemc.foundry.model;
 
+import org.jetbrains.annotations.Nullable;
 import org.machinemc.foundry.Omit;
 
 import java.util.*;
@@ -35,10 +36,19 @@ public class ClassModel {
      * </ul>
      *
      * @param type type to generate the model for
+     * @param customConstructor optional supplier of the class instances, can only be used with regular classes,
+     *                          not records
      * @return model for given type
      */
+    public static <T> ClassModel of(Class<T> type, @Nullable CustomConstructor<T> customConstructor) {
+        return ClassModelFactory.mapAuto(type, customConstructor);
+    }
+
+    /**
+     * @see #of(Class, CustomConstructor)
+     */
     public static ClassModel of(Class<?> type) {
-        return ClassModelFactory.mapAuto(type);
+        return of(type, null);
     }
 
     protected ClassModel(ModelAttribute[] attributes, ConstructionMethod constructionMethod) {

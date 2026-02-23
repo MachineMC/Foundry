@@ -231,4 +231,36 @@ public class ObjectFactoryTest {
         assertEquals(99.99, copy.fetchSub3Value());
     }
 
+    public static class CustomConstructorClass {
+        @Omit int secret = 0;
+        int value = 0;
+
+        CustomConstructorClass() {
+        }
+        CustomConstructorClass(int secret) {
+            this.secret = secret;
+        }
+
+        void setValue(int value) { this.value = value ^ secret; }
+        int getValue() { return value ^ secret; }
+        int getRawValue() { return value; }
+    }
+
+    @Test
+    void testCustomConstructorBeingUsed() {
+        int secret = 11;
+        ClassModel classModel = ClassModel.of(CustomConstructorClass.class, () -> new CustomConstructorClass(secret));
+        ObjectFactory<CustomConstructorClass> model = ObjectFactory.create(CustomConstructorClass.class, classModel);
+
+        CustomConstructorClass original = new CustomConstructorClass();
+        original.setValue(13);
+
+        ModelDataContainer container = model.write(original);
+        CustomConstructorClass copy = model.read(container);
+
+        assertNotEquals(original.getRawValue(), copy.getRawValue());
+        assertEquals(original.getValue(), copy.getValue());
+        assertEquals(13, copy.getRawValue() ^ secret);
+    }
+
 }

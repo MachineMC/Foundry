@@ -1,7 +1,5 @@
 package org.machinemc.foundry.model;
 
-import org.jetbrains.annotations.ApiStatus;
-
 import java.util.List;
 import java.util.function.BiConsumer;
 
@@ -12,7 +10,6 @@ import java.util.function.BiConsumer;
  *
  * @param fieldWriters field writers
  */
-@ApiStatus.Internal
 record FieldsInjector(BiConsumer<DeconstructedObject.Field, ModelDataContainer>[] fieldWriters) {
 
     /**

@@ -25,13 +25,26 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      * @param <T> type of the object
      * @return a codec that converts an instance of {@link T} into a deconstructed object and back
      */
-    // TODO overload method that takes class model
     public static <T> Codec<T, DeconstructedObject> codec(Class<T> type) {
-        ClassModel classModel = ClassModel.of(type);
+        return codec(type, ClassModel.of(type));
+    }
+
+    /**
+     * Creates a codec that transforms objects of type {@link T} into
+     * {@link DeconstructedObject} and back.
+     * <p>
+     * The returned codec is thread-safe and optimized for repeated use.
+     *
+     * @param type type the object to (de)construct
+     * @param classModel class model to use for the (de)construction
+     * @param <T> type of the object
+     * @return a codec that converts an instance of {@link T} into a deconstructed object and back
+     */
+    public static <T> Codec<T, DeconstructedObject> codec(Class<T> type, ClassModel classModel) {
         ObjectFactory<T> objectFactory = ObjectFactory.create(type, classModel);
         return new Codec<>(
-                Pipeline.builder(createDeconstructor(classModel, objectFactory)).build(),
-                Pipeline.builder(createConstructor(classModel, objectFactory)).build()
+                Pipeline.of(createDeconstructor(classModel, objectFactory)),
+                Pipeline.of(createConstructor(classModel, objectFactory))
         );
     }
 
@@ -45,9 +58,22 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      * @param <T> type of the object
      * @return a data handler that converts an instance of {@link T} into a deconstructed object
      */
-    // TODO overload method that takes class model
     public static <T> DataHandler<T, DeconstructedObject> createDeconstructor(Class<T> type) {
-        ClassModel classModel = ClassModel.of(type);
+        return createDeconstructor(type, ClassModel.of(type));
+    }
+
+    /**
+     * Creates a data handler that deconstructs an instance of the specified type into a
+     * {@link DeconstructedObject}.
+     * <p>
+     * The returned data handler is thread-safe and optimized for repeated use.
+     *
+     * @param type type the object to deconstruct
+     * @param classModel class model to use for the deconstruction
+     * @param <T> type of the object
+     * @return a data handler that converts an instance of {@link T} into a deconstructed object
+     */
+    public static <T> DataHandler<T, DeconstructedObject> createDeconstructor(Class<T> type, ClassModel classModel) {
         return createDeconstructor(classModel, ObjectFactory.create(type, classModel));
     }
 
@@ -64,9 +90,25 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      * @param <T> type of the object
      * @return a data handler that converts deconstructed object into an instance of {@link T}
      */
-    // TODO overload method that takes class model
     public static <T> DataHandler<DeconstructedObject, T> createConstructor(Class<T> type) {
-        ClassModel classModel = ClassModel.of(type);
+        return createConstructor(type, ClassModel.of(type));
+    }
+
+    /**
+     * Creates a data handler that reconstructs an instance of the specified type from a
+     * {@link DeconstructedObject}.
+     * <p>
+     * The returned data handler expects the input {@link DeconstructedObject} to contain fields
+     * compatible with the target class schema.
+     * <p>
+     * The returned data handler is thread-safe and optimized for repeated use.
+     *
+     * @param type type the object to reconstruct
+     * @param classModel class model to use for the construction
+     * @param <T> type of the object
+     * @return a data handler that converts deconstructed object into an instance of {@link T}
+     */
+    public static <T> DataHandler<DeconstructedObject, T> createConstructor(Class<T> type, ClassModel classModel) {
         return createConstructor(classModel, ObjectFactory.create(type, classModel));
     }
 
@@ -224,7 +266,6 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
     public record ObjectField(String name, Class<?> type, AnnotatedType annotatedType, Object value) implements Field {
     }
 
-    // TODO this should possibly be in a different class
     private static <T> DataHandler<T, DeconstructedObject> createDeconstructor(ClassModel classModel,
                                                                                ObjectFactory<T> objectFactory) {
         FieldsExtractor fieldsExtractor = FieldsExtractor.of(classModel);
@@ -235,7 +276,6 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
         };
     }
 
-    // TODO this should possibly be in a different class
     private static <T> DataHandler<DeconstructedObject, T> createConstructor(ClassModel classModel,
                                                                              ObjectFactory<T> objectFactory) {
         FieldsInjector fieldsInjector = FieldsInjector.of(classModel);

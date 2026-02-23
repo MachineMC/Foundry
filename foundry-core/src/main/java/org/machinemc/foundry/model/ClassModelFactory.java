@@ -29,15 +29,19 @@ final class ClassModelFactory {
      * Class member are allowed to have {@code private} access modifier.
      *
      * @param type type to generate the model for
+     * @param customConstructor custom constructor for the class, if {@code null}, no args constructor is used
      * @return model for given type
      */
-    static ClassModel mapAuto(Class<?> type) {
+    static ClassModel mapAuto(Class<?> type, @Nullable ClassModel.CustomConstructor<?> customConstructor) {
         if (type.isEnum() || type.isInterface() || type.isAnnotation() || Modifier.isAbstract(type.getModifiers()))
             throw new UnsupportedOperationException("Can not automatically resolve class model for '"
                     + type.getName() + "'");
 
-        if (type.isRecord())
+        if (type.isRecord()) {
+            Preconditions.checkState(customConstructor == null, "Record class models can not have "
+                    + "custom constructors");
             return ofRecord(type);
+        }
 
         ModelAttribute[] attributes = getAllFields(type).stream()
                 .filter(ClassModelFactory::keepField)
@@ -55,7 +59,8 @@ final class ClassModelFactory {
         Constructor<?> noArgs = noArgsConstructor(type);
         Preconditions.checkState(noArgs != null, "Class '" + type.getName() + "' is missing "
                 + "no arguments constructor");
-        return new ClassModel(attributes, ClassModel.NoArgsConstructor.INSTANCE);
+        return new ClassModel(attributes,
+                customConstructor != null ? customConstructor : ClassModel.NoArgsConstructor.INSTANCE);
     }
 
     private static ClassModel ofRecord(Class<?> type) {

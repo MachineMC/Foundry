@@ -1,7 +1,5 @@
 package org.machinemc.foundry.model;
 
-import org.jetbrains.annotations.ApiStatus;
-
 import java.lang.reflect.AnnotatedType;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +12,6 @@ import java.util.function.Function;
  *
  * @param fieldReaders field readers
  */
-@ApiStatus.Internal
 record FieldsExtractor(Function<ModelDataContainer, DeconstructedObject.Field>[] fieldReaders) {
 
     /**

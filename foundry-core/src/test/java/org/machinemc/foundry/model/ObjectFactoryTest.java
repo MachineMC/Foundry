@@ -2,7 +2,6 @@ package org.machinemc.foundry.model;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.machinemc.foundry.Omit;
 
 import java.util.Objects;
 
@@ -249,7 +248,11 @@ public class ObjectFactoryTest {
     @Test
     void testCustomConstructorBeingUsed() {
         int secret = 11;
-        ClassModel classModel = ClassModel.of(CustomConstructorClass.class, () -> new CustomConstructorClass(secret));
+        ClassModel<CustomConstructorClass> classModel = ClassModel.ofClass(
+                CustomConstructorClass.class,
+                ClassModel.ModellingStrategy.STRUCTURE,
+                () -> new CustomConstructorClass(secret)
+        );
         ObjectFactory<CustomConstructorClass> model = ObjectFactory.create(CustomConstructorClass.class, classModel);
 
         CustomConstructorClass original = new CustomConstructorClass();
@@ -261,6 +264,38 @@ public class ObjectFactoryTest {
         assertNotEquals(original.getRawValue(), copy.getRawValue());
         assertEquals(original.getValue(), copy.getValue());
         assertEquals(13, copy.getRawValue() ^ secret);
+    }
+
+    public enum Priority {
+        LOW(10), MEDIUM(50), HIGH(100);
+
+        private final int level;
+
+        Priority(int level) {
+            this.level = level;
+        }
+
+        public int getLevel() {
+            return level;
+        }
+    }
+
+    @Test
+    void testEnumMapping() {
+        ClassModel<Priority> classModel = ClassModel.ofEnum(
+                Priority.class,
+                ClassModel.ModellingStrategy.STRUCTURE,
+                ClassModel.EnumConstructor.valueOf(Priority.class)
+        );
+        ObjectFactory<Priority> model = ObjectFactory.create(Priority.class, classModel);
+
+        Priority original = Priority.HIGH;
+
+        ModelDataContainer container = model.write(original);
+        Priority copy = model.read(container);
+
+        assertSame(original, copy, "Decoded enum should be the exact same instance");
+        assertEquals(100, copy.getLevel());
     }
 
 }

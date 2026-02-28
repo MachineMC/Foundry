@@ -29,7 +29,7 @@ final class ObjectFactoryPartGenerator {
      * @param includeWrite whether the {@link ObjectFactory.ObjectFactoryPart#write(Object)} should be implemented
      * @param includeRead whether the {@link ObjectFactory.ObjectFactoryPart#read(ModelDataContainer)} should be
      *                    implemented, this is {@code false} for records, as their attributes get set during the
-     *                    creation, not after.
+     *                    creation, not after, and also for enums, as they are constants resolved by name.
      * @param attributes attributes to access in this part (attributes of the parent class)
      * @return object factory
      */
@@ -38,6 +38,17 @@ final class ObjectFactoryPartGenerator {
                                                                List<ModelAttribute> attributes) {
         Type sourceT = Type.getType(type);
         Type thisT = Type.getObjectType(sourceT.getInternalName() + "$ObjectFactoryPart");
+
+        Class<?> target = type;
+        String moduleName = target.getModule().getName();
+        if (moduleName != null && moduleName.equals("java.base")) {
+            // java.base is closed to us, we use one of our classes
+            // and just expect we do not access internals.
+            // this happens e.g. with enums for their name and ordinal fields
+            target = ObjectFactoryPartGenerator.class;
+            thisT = Type.getObjectType(Type.getInternalName(ObjectFactoryPartGenerator.class)
+                    + "$ObjectFactoryPart");
+        }
 
         ClassData.Builder builder = ClassData.builder();
         for (var attribute : attributes) {
@@ -72,7 +83,7 @@ final class ObjectFactoryPartGenerator {
         classData.visitStaticBlock(thisT, cw);
         cw.visitEnd();
 
-        return ObjectFactoryGenerator.defineAndInstantiate(type, cw.toByteArray(), classData);
+        return ObjectFactoryGenerator.defineAndInstantiate(target, cw.toByteArray(), classData);
     }
 
     /**

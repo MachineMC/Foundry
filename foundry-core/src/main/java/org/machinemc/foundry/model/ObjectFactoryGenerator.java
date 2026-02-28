@@ -36,12 +36,13 @@ final class ObjectFactoryGenerator {
      * @param classModel model to use for the (de)construction
      * @return object factory
      */
-    static ObjectFactory<?> generate(Class<?> type, ClassModel classModel) {
+    static ObjectFactory<?> generate(Class<?> type, ClassModel<?> classModel) {
         ClassData.Builder classDataBuilder = ClassData.builder();
         ClassModel.ConstructionMethod constructionMethod = classModel.getConstructionMethod();
 
-        if (constructionMethod instanceof ClassModel.CustomConstructor<?> custom)
-            classDataBuilder.reserveConstructor(custom);
+        if (constructionMethod instanceof ClassModel.CustomConstructor<?>
+                || constructionMethod instanceof ClassModel.EnumConstructor<?>)
+            classDataBuilder.reserveConstructor(constructionMethod);
 
         Map<Class<?>, List<ModelAttribute>> attributesByParent = Arrays.stream(classModel.getAttributes())
                 .collect(Collectors.groupingBy(
@@ -51,7 +52,8 @@ final class ObjectFactoryGenerator {
 
         attributesByParent.forEach((parent, parentAttributes) -> {
             // for records we do not generate the read implementation as all fields are set in the constructor
-            boolean includeRead = !(constructionMethod instanceof ClassModel.RecordConstructor);
+            // for enums we do not generate the read implementation as they are constants resolved by name
+            boolean includeRead = !type.isRecord() && !type.isEnum();
             var part = ObjectFactoryPartGenerator.generatePart(parent, true, includeRead, parentAttributes);
             classDataBuilder.reserveParentAccessor(parent, part);
         });
@@ -68,8 +70,10 @@ final class ObjectFactoryGenerator {
         visitConstructor(cw);
         visitWriteMethod(cw, thisT, attributesByParent, classData);
 
-        if (constructionMethod instanceof ClassModel.RecordConstructor) {
+        if (type.isRecord()) {
             visitReadForRecord(cw, sourceT, List.of(classModel.getAttributes()));
+        } else if (type.isEnum()) {
+            visitReadForEnum(cw, sourceT, thisT, classModel.getAttributes()[0], classData);
         } else {
             visitReadMethod(cw, sourceT, thisT, constructionMethod, attributesByParent, classData);
         }
@@ -215,6 +219,38 @@ final class ObjectFactoryGenerator {
     }
 
     /**
+     * Visits the {@link ObjectFactory#read(ModelDataContainer)} method for enum classes.
+     * <p>
+     * For enums this is resolved by the first object element in the container which is always guaranteed to be the
+     * name of the enum constant.
+     *
+     * @param cv class visitor
+     * @param sourceT type of the class this factory is for
+     * @param thisT type of the class this visitor is for
+     * @param nameAttribute attribute of the enum name
+     * @param classData class data
+     */
+    private static void visitReadForEnum(ClassVisitor cv, Type sourceT, Type thisT, ModelAttribute nameAttribute,
+                                         ClassData classData) {
+        Method readMethod = new Method(READ_METHOD_NAME, Type.getType(Object.class),
+                new Type[]{Type.getType(ModelDataContainer.class)});
+        GeneratorAdapter ga = new GeneratorAdapter(ACC_PUBLIC, readMethod, null, null, cv);
+        ga.visitCode();
+
+        ga.loadArg(0);
+        ObjectFactoryPartGenerator.visitReadFromContainer(ga, nameAttribute);
+
+        classData.loadOnStack(thisT, ga, classData.constructorIdx());
+        ga.swap();
+        ga.invokeInterface(Type.getType(ClassModel.EnumConstructor.class),
+                new Method("get", Type.getType(Enum.class), new Type[] {Type.getType(String.class)}));
+        ga.checkCast(sourceT);
+
+        ga.returnValue();
+        ga.endMethod();
+    }
+
+    /**
      * Defines new anonymous nestmate class using private lookup in {@code target} with given data.
      * <p>
      * Calls its no arguments constructor and returns the instance.
@@ -260,7 +296,8 @@ final class ObjectFactoryGenerator {
      * @return instance
      * @param <T> type
      */
-    static <T> T defineAndInstantiate(Class<?> target, byte[] bytes, ClassData classData, Class<?>[] paramTypes, Object... args) {
+    static <T> T defineAndInstantiate(Class<?> target, byte[] bytes, ClassData classData,
+                                      Class<?>[] paramTypes, Object... args) {
         try {
             MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(target, MethodHandles.lookup());
             Class<?> generated = lookup.defineHiddenClassWithClassData(bytes, classData.asList(), true,
@@ -270,7 +307,8 @@ final class ObjectFactoryGenerator {
             //noinspection unchecked
             return (T) constructor.newInstance(args);
         } catch (Exception exception) {
-            throw new RuntimeException("Failed to define and instantiate generated class for " + target.getName(), exception);
+            throw new RuntimeException("Failed to define and instantiate generated class for " + target.getName(),
+                    exception);
         }
     }
 

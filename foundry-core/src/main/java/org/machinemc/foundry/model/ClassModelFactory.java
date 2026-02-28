@@ -2,13 +2,12 @@ package org.machinemc.foundry.model;
 
 import com.google.common.base.Preconditions;
 import org.jetbrains.annotations.Nullable;
-import org.machinemc.foundry.Omit;
 
 import java.lang.reflect.*;
 import java.util.*;
 
 /**
- * Class that automatically generated class models for types.
+ * Class that automatically generates class models for types.
  *
  * @see ClassModel
  */
@@ -18,64 +17,186 @@ final class ClassModelFactory {
         throw new UnsupportedOperationException();
     }
 
-    /**
-     * Automatically creates a class model from given type.
-     * <p>
-     * This works for both regular classes and records.
-     * <p>
-     * Getters and setters (both non-chaining and chaining) respecting the JavaBeans naming or
-     * fluent record naming schemes are prioritized over the direct field access.
-     * <p>
-     * Class member are allowed to have {@code private} access modifier.
-     *
-     * @param type type to generate the model for
-     * @param customConstructor custom constructor for the class, if {@code null}, no args constructor is used
-     * @return model for given type
-     */
-    static ClassModel mapAuto(Class<?> type, @Nullable ClassModel.CustomConstructor<?> customConstructor) {
-        if (type.isEnum() || type.isInterface() || type.isAnnotation() || Modifier.isAbstract(type.getModifiers()))
-            throw new UnsupportedOperationException("Can not automatically resolve class model for '"
-                    + type.getName() + "'");
+    static <T> ClassModel<T> mapClass(Class<T> type) {
+        return mapClass(type, ClassModel.ModellingStrategy.STRUCTURE, null);
+    }
 
-        if (type.isRecord()) {
-            Preconditions.checkState(customConstructor == null, "Record class models can not have "
-                    + "custom constructors");
-            return ofRecord(type);
-        }
+    static <T> ClassModel<T> mapClass(Class<T> type, ClassModel.ModellingStrategy strategy,
+                                      @Nullable ClassModel.CustomConstructor<T> customConstructor) {
+        Preconditions.checkArgument(!type.isEnum() && !type.isInterface() && !type.isAnnotation()
+                        && !type.isRecord(), "Type '%s' cannot be mapped as a standard class",
+                type.getName());
+        Preconditions.checkState(!Modifier.isAbstract(type.getModifiers()) || customConstructor != null,
+                "Type '%s' is abstract and can not be mapped without custom constructor");
 
-        ModelAttribute[] attributes = getAllFields(type).stream()
-                .filter(ClassModelFactory::keepField)
+        ModelAttribute[] attributes = extractAttributes(type, strategy);
+        validateSetters(type, attributes);
+
+        Constructor<?> noArgs = noArgsConstructor(type);
+        Preconditions.checkState(customConstructor != null || noArgs != null,
+                "Class '%s' is missing a no-arguments constructor and no custom constructor " +
+                        "was provided", type.getName());
+
+        return new ClassModel<>(type, attributes,
+                customConstructor != null ? customConstructor : ClassModel.NoArgsConstructor.INSTANCE);
+    }
+
+    static <T> ClassModel<T> mapInterface(Class<T> type, ClassModel.CustomConstructor<T> customConstructor) {
+        Preconditions.checkArgument(type.isInterface(), "Type '%s' must be an interface",
+                type.getName());
+        Preconditions.checkNotNull(customConstructor, "Interface mapping requires a custom constructor");
+
+        ModelAttribute[] attributes = extractAttributes(type, ClassModel.ModellingStrategy.EXPOSED);
+        validateSetters(type, attributes);
+
+        return new ClassModel<>(type, attributes, customConstructor);
+    }
+
+    static <T extends Record> ClassModel<T> mapRecord(Class<T> type) {
+        Preconditions.checkArgument(type.isRecord(), "Type '%s' must be a record", type.getName());
+
+        ModelAttribute[] attributes = Arrays.stream(type.getRecordComponents())
                 .map(ClassModelFactory::asAttribute)
                 .toArray(ModelAttribute[]::new);
+
+        Constructor<?> constructor = allArgsConstructor(type, attributes);
+        Preconditions.checkNotNull(constructor); // always present
+
+        return new ClassModel<>(type, attributes, ClassModel.RecordConstructor.INSTANCE);
+    }
+
+    static <T extends Enum<T>> ClassModel<T> mapEnum(Class<T> type) {
+        return mapEnum(type, ClassModel.ModellingStrategy.STRUCTURE, null);
+    }
+
+    static <T extends Enum<T>> ClassModel<T> mapEnum(Class<T> type, ClassModel.ModellingStrategy strategy,
+                                                     @Nullable ClassModel.EnumConstructor<T> customConstructor) {
+        Preconditions.checkArgument(type.isEnum(), "Type '%s' must be an enum", type.getName());
+
+        List<ModelAttribute> attributes = new ArrayList<>(List.of(extractAttributes(type, strategy)));
+
+        for (int i = 0; i < attributes.size(); i++) {
+            ModelAttribute a = attributes.get(i);
+            // we remove the setter as enums are constants, we resolve them by name
+            ModelAttribute withoutSetter = new ModelAttribute(a.source(), a.name(), a.type(), a.annotatedType(),
+                    new AttributeAccess(a.access().getter(), null));
+            attributes.set(i, withoutSetter);
+        }
+
+        // move the built in attributes to the front
+        ModelAttribute[] builtIn = new ModelAttribute[2];
+        List<ModelAttribute> javaInternals = new ArrayList<>();
+        for (ModelAttribute a : attributes) {
+            if (a.source() != Enum.class)
+                continue;
+            switch (a.name()) {
+                case "name" -> builtIn[0] = a;
+                case "ordinal" -> builtIn[1] = a;
+                default -> javaInternals.add(a);
+            }
+        }
+        Arrays.stream(builtIn).forEach(attributes::remove);
+        attributes.removeAll(javaInternals);
+
+        ModelAttribute[] sortedAttributes = new ModelAttribute[builtIn.length + attributes.size()];
+        System.arraycopy(builtIn, 0, sortedAttributes, 0, builtIn.length);
+        for (int i = 0; i < attributes.size(); i++) {
+            sortedAttributes[i + builtIn.length] = attributes.get(i);
+        }
+
+        return new ClassModel<>(type, sortedAttributes,
+                customConstructor != null ? customConstructor : ClassModel.EnumConstructor.valueOf(type));
+    }
+
+    private static ModelAttribute[] extractAttributes(Class<?> type, ClassModel.ModellingStrategy strategy) {
+        if (strategy == ClassModel.ModellingStrategy.STRUCTURE) {
+            return getAllFields(type).stream()
+                    .filter(ClassModelFactory::keepField)
+                    .map(ClassModelFactory::asAttribute)
+                    .toArray(ModelAttribute[]::new);
+        } else {
+            return extractExposedAttributes(type);
+        }
+    }
+
+    private static ModelAttribute[] extractExposedAttributes(Class<?> type) {
+        Map<String, Method> getters = new LinkedHashMap<>();
+        Map<String, Method> setters = new LinkedHashMap<>();
+
+        for (Method method : type.getMethods()) {
+            if (Modifier.isStatic(method.getModifiers()) || method.getDeclaringClass() == Object.class) continue;
+            if (method.isAnnotationPresent(Omit.class)) continue;
+            if (method.isBridge() || method.isSynthetic()) continue;
+
+            if (method.getParameterCount() == 0 && method.getReturnType() != void.class) {
+                getters.putIfAbsent(getPropertyName(method.getName(), true), method);
+            } else if (method.getParameterCount() == 1) {
+                setters.putIfAbsent(getPropertyName(method.getName(), false), method);
+            }
+        }
+
+        List<ModelAttribute> attributes = new ArrayList<>();
+        for (var entry : getters.entrySet()) {
+            String name = entry.getKey();
+            Method getter = entry.getValue();
+            Method setter = setters.get(name);
+
+            // verify setter parameter type matches getter return type
+            if (setter != null && !setter.getParameterTypes()[0].equals(getter.getReturnType())) {
+                setter = null;
+            }
+
+            AttributeAccess access = new AttributeAccess(
+                    new AttributeAccess.Method(getter.getReturnType(), getter.getName(), Collections.emptyList()),
+                    setter != null
+                            ? new AttributeAccess.Method(setter.getReturnType(), setter.getName(),
+                            List.of(setter.getParameterTypes()))
+                            : null
+            );
+
+            attributes.add(new ModelAttribute(getter.getDeclaringClass(), name, getter.getReturnType(),
+                    getter.getAnnotatedReturnType(), access));
+        }
+
+        return attributes.toArray(new ModelAttribute[0]);
+    }
+
+    private static String getPropertyName(String methodName, boolean isGetter) {
+        if (isGetter) {
+            String getter = extractFromPrefix("get", methodName);
+            if (getter != null) return getter;
+            getter = extractFromPrefix("is", methodName);
+            if (getter != null) return getter;
+        } else {
+            String setter = extractFromPrefix("set", methodName);
+            if (setter != null) return setter;
+        }
+        return methodName; // fallback to fluent naming
+    }
+
+    private static @Nullable String extractFromPrefix(String prefix, String methodName) {
+        if (!methodName.startsWith(prefix) || methodName.length() <= prefix.length()
+                || Character.isLowerCase(methodName.charAt(prefix.length())))
+            return null;
+        return Character.toLowerCase(methodName.charAt(prefix.length()))
+                + methodName.substring(prefix.length() + 1);
+    }
+
+    private static void validateSetters(Class<?> type, ModelAttribute[] attributes) {
         ModelAttribute missingSetter = Arrays.stream(attributes)
                 .filter(attribute -> attribute.access().setter() == null)
                 .findFirst()
                 .orElse(null);
-        if (missingSetter != null)
+        if (missingSetter != null) {
             throw new IllegalStateException("Attribute '" + missingSetter.name() + "' of class '" + type.getName()
                     + "' is missing setter");
-        // We must use no arguments constructor, as fields in classes are in no guaranteed order. We can not
-        // determine the correct parameters order in all args constructor. This does not apply to records.
-        Constructor<?> noArgs = noArgsConstructor(type);
-        Preconditions.checkState(noArgs != null, "Class '" + type.getName() + "' is missing "
-                + "no arguments constructor");
-        return new ClassModel(attributes,
-                customConstructor != null ? customConstructor : ClassModel.NoArgsConstructor.INSTANCE);
-    }
-
-    private static ClassModel ofRecord(Class<?> type) {
-        ModelAttribute[] attributes = Arrays.stream(type.getRecordComponents())
-                .map(ClassModelFactory::asAttribute)
-                .toArray(ModelAttribute[]::new);
-        Constructor<?> constructor = allArgsConstructor(type, attributes);
-        Preconditions.checkNotNull(constructor); // is always present on records
-        return new ClassModel(attributes, ClassModel.RecordConstructor.INSTANCE);
+        }
     }
 
     private static SequencedSet<Field> getAllFields(Class<?> type) {
         SequencedSet<Field> collected = new LinkedHashSet<>();
         List<Class<?>> classes = new LinkedList<>();
-        while (type.getSuperclass() != null) {
+        while (type != null && type != Object.class) {
             classes.addFirst(type); // fields of the parent classes are included first
             type = type.getSuperclass();
         }

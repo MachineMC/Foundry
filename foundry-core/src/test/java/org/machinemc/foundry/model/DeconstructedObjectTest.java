@@ -2,7 +2,6 @@ package org.machinemc.foundry.model;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.machinemc.foundry.Omit;
 
 import java.util.*;
 
@@ -302,6 +301,154 @@ public class DeconstructedObjectTest {
         assertEquals("Deep Hierarchy", copy.fetchSub1Name());
         assertTrue(copy.fetchSub2Flag());
         assertEquals(99.99, copy.fetchSub3Value());
+    }
+
+    public interface ConfigNode {
+        String getHost();
+        void setHost(String host);
+
+        int getPort();
+        void setPort(int port);
+    }
+
+    public static class DefaultConfigNode implements ConfigNode {
+        private String host;
+        private int port;
+        @Override public String getHost() { return host; }
+        @Override public void setHost(String host) { this.host = host; }
+        @Override public int getPort() { return port; }
+        @Override public void setPort(int port) { this.port = port; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof ConfigNode that)) return false;
+            return port == that.getPort() && Objects.equals(host, that.getHost());
+        }
+    }
+
+    @Test
+    void testInterfaceMapping() throws Exception {
+        ClassModel.CustomConstructor<ConfigNode> constructor = DefaultConfigNode::new;
+        ClassModel<ConfigNode> classModel = ClassModel.ofInterface(ConfigNode.class, constructor);
+
+        var codec = DeconstructedObject.codec(ConfigNode.class, classModel);
+
+        ConfigNode original = new DefaultConfigNode();
+        original.setHost("localhost");
+        original.setPort(8080);
+
+        DeconstructedObject deconstructed = codec.encode(original);
+
+        assertEquals(2, deconstructed.size());
+        assertEquals("localhost", ((DeconstructedObject.ObjectField) getField(deconstructed, "host")
+                .orElseThrow()).value());
+        assertEquals(8080, ((DeconstructedObject.IntField) getField(deconstructed, "port")
+                .orElseThrow()).value());
+
+        ConfigNode copy = codec.decode(deconstructed);
+
+        assertNotSame(original, copy);
+        assertEquals(original, copy);
+    }
+
+    public static abstract class AbstractTask {
+        private String id;
+
+        protected AbstractTask() {}
+
+        public String getId() { return id; }
+        public void setId(String id) { this.id = id; }
+
+        public abstract boolean isCompleted();
+    }
+
+    public static class ConcreteTask extends AbstractTask {
+        private boolean completed;
+
+        @Override
+        public boolean isCompleted() { return completed; }
+        public void setCompleted(boolean completed) { this.completed = completed; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof AbstractTask that)) return false;
+            return isCompleted() == that.isCompleted() && Objects.equals(getId(), that.getId());
+        }
+    }
+
+    @Test
+    void testAbstractClassMapping() throws Exception {
+        ClassModel.CustomConstructor<AbstractTask> customConstructor = ConcreteTask::new;
+        ClassModel<AbstractTask> classModel = ClassModel.ofClass(
+                AbstractTask.class,
+                ClassModel.ModellingStrategy.STRUCTURE,
+                customConstructor
+        );
+
+        var codec = DeconstructedObject.codec(AbstractTask.class, classModel);
+
+        ConcreteTask original = new ConcreteTask();
+        original.setId("TASK-123");
+        original.setCompleted(true);
+
+        DeconstructedObject deconstructed = codec.encode(original);
+
+        assertEquals(1, deconstructed.size());
+        assertEquals("TASK-123", ((DeconstructedObject.ObjectField) getField(deconstructed, "id")
+                .orElseThrow()).value());
+
+        AbstractTask copy = codec.decode(deconstructed);
+
+        assertNotSame(original, copy);
+        assertEquals("TASK-123", copy.getId());
+        assertFalse(copy.isCompleted()); // state lost because 'completed' is not in AbstractTask
+    }
+
+    public enum Priority {
+        LOW(10), MEDIUM(50), HIGH(100);
+
+        private final int level;
+
+        Priority(int level) {
+            this.level = level;
+        }
+
+        public int getLevel() {
+            return level;
+        }
+    }
+
+    @Test
+    void testEnumMapping() throws Exception {
+        ClassModel<Priority> classModel = ClassModel.ofEnum(
+                Priority.class,
+                ClassModel.ModellingStrategy.STRUCTURE,
+                ClassModel.EnumConstructor.valueOf(Priority.class)
+        );
+        var codec = DeconstructedObject.codec(Priority.class, classModel);
+
+        Priority original = Priority.HIGH;
+
+        DeconstructedObject deconstructed = codec.encode(original);
+
+        assertTrue(deconstructed.size() >= 3);
+
+        DeconstructedObject.ObjectField nameField = (DeconstructedObject.ObjectField)
+                getField(deconstructed, "name").orElseThrow();
+        assertEquals("HIGH", nameField.value());
+
+        DeconstructedObject.IntField ordinalField = (DeconstructedObject.IntField)
+                getField(deconstructed, "ordinal").orElseThrow();
+        assertEquals(2, ordinalField.value());
+
+        DeconstructedObject.IntField levelField = (DeconstructedObject.IntField)
+                getField(deconstructed, "level").orElseThrow();
+        assertEquals(100, levelField.value());
+
+        Priority copy = codec.decode(deconstructed);
+        assertSame(original, copy, "Enum instances must maintain JVM identity");
     }
 
 }

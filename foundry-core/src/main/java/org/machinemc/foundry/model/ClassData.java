@@ -32,13 +32,13 @@ final class ClassData {
         return new Builder();
     }
 
-    private final @Nullable ClassModel.CustomConstructor<?> constructor;
+    private final @Nullable ClassModel.ConstructionMethod constructor;
     private final List<ModelAttribute> getters;
     private final List<ModelAttribute> setters;
     private final Map<Class<?>, ObjectFactory.ObjectFactoryPart<?>> parentAccessors;
     private final int size;
 
-    private ClassData(@Nullable ClassModel.CustomConstructor<?> constructor,
+    private ClassData(@Nullable ClassModel.ConstructionMethod constructor,
                       List<ModelAttribute> getters, List<ModelAttribute> setters,
                       Map<Class<?>, ObjectFactory.ObjectFactoryPart<?>> parentAccessors) {
         this.constructor = constructor;
@@ -88,6 +88,15 @@ final class ClassData {
         return getters.size() + setters.size() + parentAccessors.size();
     }
 
+    private Class<?> getConstructorType() {
+        Preconditions.checkState(constructor != null, "Expected constructor, got null");
+        return switch (constructor) {
+            case ClassModel.EnumConstructor<?> _ -> ClassModel.EnumConstructor.class;
+            case ClassModel.CustomConstructor<?> _ -> ClassModel.CustomConstructor.class;
+            default -> throw new IllegalStateException("Unexpected value: " + constructor);
+        };
+    }
+
     /**
      * Visits the fields of class data on given visitor.
      *
@@ -104,7 +113,7 @@ final class ClassData {
         for (var _ : parentAccessors.values())
             visitField(visitor, i++, ObjectFactory.ObjectFactoryPart.class);
         if (constructor != null)
-            visitField(visitor, i, ClassModel.CustomConstructor.class);
+            visitField(visitor, i, getConstructorType());
     }
 
     private void visitField(ClassVisitor visitor, int idx, Class<?> fieldType) {
@@ -150,7 +159,7 @@ final class ClassData {
         for (var _ : parentAccessors.values())
             putField(owner, mv, i++, ObjectFactory.ObjectFactoryPart.class);
         if (constructor != null)
-            putField(owner, mv, i, ClassModel.CustomConstructor.class);
+            putField(owner, mv, i, getConstructorType());
     }
 
     private void putField(Type owner, MethodVisitor mv, int idx, Class<?> type) {
@@ -202,7 +211,7 @@ final class ClassData {
         }
         // constructor
         else if (constructor != null && idx == constructorIdx()) {
-            type = ClassModel.CustomConstructor.class;
+            type = getConstructorType();
         }
         else {
             throw new ArrayIndexOutOfBoundsException("Index " + idx + " is out of bounds for size " + size);
@@ -269,7 +278,7 @@ final class ClassData {
         private Builder() {
         }
 
-        private @Nullable ClassModel.CustomConstructor<?> constructor = null;
+        private @Nullable ClassModel.ConstructionMethod constructor = null;
         private final List<ModelAttribute> getters = new ArrayList<>();
         private final List<ModelAttribute> setters = new ArrayList<>();
         private final Map<Class<?>, ObjectFactory.ObjectFactoryPart<?>> parentAccessors = new LinkedHashMap<>();
@@ -279,7 +288,7 @@ final class ClassData {
          *
          * @param constructor constructor
          */
-        void reserveConstructor(ClassModel.CustomConstructor<?> constructor) {
+        void reserveConstructor(ClassModel.ConstructionMethod constructor) {
             Preconditions.checkState(this.constructor == null, "You can reserve place only for "
                     + "a single constructor");
             this.constructor = constructor;

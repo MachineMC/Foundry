@@ -32,7 +32,7 @@ public abstract class ObjectFactory<T> {
      * @return object factory for objects of given type
      * @param <T> object type
      */
-    public static <T> ObjectFactory<T> create(Class<T> type, ClassModel classModel) {
+    public static <T> ObjectFactory<T> create(Class<T> type, ClassModel<T> classModel) {
         //noinspection unchecked
         return (ObjectFactory<T>) ObjectFactoryGenerator.generate(type, classModel);
     }
@@ -42,7 +42,7 @@ public abstract class ObjectFactory<T> {
     /**
      * @param classModel class model for the type of this factory
      */
-    protected ObjectFactory(ClassModel classModel) {
+    protected ObjectFactory(ClassModel<T> classModel) {
         holderFactory = ModelDataContainer.Factory.of(classModel);
     }
 

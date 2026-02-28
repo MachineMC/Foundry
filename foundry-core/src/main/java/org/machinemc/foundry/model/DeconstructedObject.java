@@ -40,7 +40,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      * @param <T> type of the object
      * @return a codec that converts an instance of {@link T} into a deconstructed object and back
      */
-    public static <T> Codec<T, DeconstructedObject> codec(Class<T> type, ClassModel classModel) {
+    public static <T> Codec<T, DeconstructedObject> codec(Class<T> type, ClassModel<T> classModel) {
         ObjectFactory<T> objectFactory = ObjectFactory.create(type, classModel);
         return new Codec<>(
                 Pipeline.of(createDeconstructor(classModel, objectFactory)),
@@ -73,7 +73,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      * @param <T> type of the object
      * @return a data handler that converts an instance of {@link T} into a deconstructed object
      */
-    public static <T> DataHandler<T, DeconstructedObject> createDeconstructor(Class<T> type, ClassModel classModel) {
+    public static <T> DataHandler<T, DeconstructedObject> createDeconstructor(Class<T> type, ClassModel<T> classModel) {
         return createDeconstructor(classModel, ObjectFactory.create(type, classModel));
     }
 
@@ -108,7 +108,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
      * @param <T> type of the object
      * @return a data handler that converts deconstructed object into an instance of {@link T}
      */
-    public static <T> DataHandler<DeconstructedObject, T> createConstructor(Class<T> type, ClassModel classModel) {
+    public static <T> DataHandler<DeconstructedObject, T> createConstructor(Class<T> type, ClassModel<T> classModel) {
         return createConstructor(classModel, ObjectFactory.create(type, classModel));
     }
 
@@ -266,7 +266,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
     public record ObjectField(String name, Class<?> type, AnnotatedType annotatedType, Object value) implements Field {
     }
 
-    private static <T> DataHandler<T, DeconstructedObject> createDeconstructor(ClassModel classModel,
+    private static <T> DataHandler<T, DeconstructedObject> createDeconstructor(ClassModel<T> classModel,
                                                                                ObjectFactory<T> objectFactory) {
         FieldsExtractor fieldsExtractor = FieldsExtractor.of(classModel);
         return obj -> {
@@ -276,7 +276,7 @@ public final class DeconstructedObject implements Iterable<DeconstructedObject.F
         };
     }
 
-    private static <T> DataHandler<DeconstructedObject, T> createConstructor(ClassModel classModel,
+    private static <T> DataHandler<DeconstructedObject, T> createConstructor(ClassModel<T> classModel,
                                                                              ObjectFactory<T> objectFactory) {
         FieldsInjector fieldsInjector = FieldsInjector.of(classModel);
         return deconstructed -> {

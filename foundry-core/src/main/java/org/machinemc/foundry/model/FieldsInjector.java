@@ -18,7 +18,7 @@ record FieldsInjector(BiConsumer<DeconstructedObject.Field, ModelDataContainer>[
      * @param model model
      * @return fields injector for given model
      */
-    static FieldsInjector of(ClassModel model) {
+    static FieldsInjector of(ClassModel<?> model) {
         ModelAttribute[] attributes = model.getAttributes();
         //noinspection unchecked
         BiConsumer<DeconstructedObject.Field, ModelDataContainer>[] fieldWriters = new BiConsumer[attributes.length];

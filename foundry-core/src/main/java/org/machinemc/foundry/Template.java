@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Unmodifiable;
+import org.machinemc.foundry.model.Omit;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;

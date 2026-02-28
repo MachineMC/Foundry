@@ -24,13 +24,13 @@ public final class ModelDataContainer {
          * @param model class model
          * @return model data container factory
          */
-        public static Factory of(ClassModel model) {
+        public static Factory of(ClassModel<?> model) {
             return new Factory(model);
         }
 
         private final int booleans, chars, bytes, shorts, ints, longs, floats, doubles, objects;
 
-        private Factory(ClassModel model) {
+        private Factory(ClassModel<?> model) {
             ModelAttribute[] attributes = model.getAttributes();
             int booleans = 0, chars = 0, bytes = 0, shorts = 0, ints = 0, longs = 0, floats = 0, doubles = 0, objects = 0;
             for (ModelAttribute attribute : attributes) {

@@ -20,7 +20,7 @@ record FieldsExtractor(Function<ModelDataContainer, DeconstructedObject.Field>[]
      * @param model model
      * @return fields extractor for given model
      */
-    static FieldsExtractor of(ClassModel model) {
+    static FieldsExtractor of(ClassModel<?> model) {
         ModelAttribute[] attributes = model.getAttributes();
         //noinspection unchecked
         Function<ModelDataContainer, DeconstructedObject.Field>[] fieldReaders = new Function[attributes.length];
